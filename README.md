@@ -54,3 +54,23 @@ Use **Mais → Backup** para exportar regularmente o save em JSON.
 ## Funcionamento offline
 
 Depois da primeira abertura completa, o service worker mantém os arquivos principais disponíveis sem internet.
+
+
+## Atualização visual Black/Red
+
+Esta versão altera apenas o visual:
+
+- preto absoluto e grafite;
+- vermelho profundo e vermelho vivo;
+- cartões mais dramáticos;
+- barras de progresso luminosas;
+- botões e navegação redesenhados;
+- melhor aparência em modo instalado.
+
+O formato do save continua o mesmo da V1. Ao substituir os arquivos no GitHub,
+os dados já gravados no iPhone permanecem no armazenamento local.
+
+Depois de publicar, abra o app com internet uma vez. Se o visual antigo continuar:
+1. feche o aplicativo;
+2. abra novamente;
+3. no Safari, recarregue a página uma vez.
