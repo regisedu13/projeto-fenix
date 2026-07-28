@@ -1,0 +1,66 @@
+
+:root{
+  --bg:#0b0d12;--card:#151923;--card2:#1c2230;--text:#f4f7fb;--muted:#98a2b3;
+  --orange:#ff7a1a;--blue:#4b8bff;--green:#37d67a;--red:#ff5b68;--border:#293142;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{min-height:100vh}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+#app{min-height:100vh}
+.app-shell{max-width:860px;margin:0 auto;padding:18px 16px 110px}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+.eyebrow{color:var(--orange);font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+h1{font-size:31px;line-height:1.05;margin:6px 0 8px}
+h2{font-size:21px;margin:0 0 8px}
+p{margin:0}
+.muted{color:var(--muted);font-size:13px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:16px 0}
+.stat,.card,.mission,.history-row{background:var(--card);border:1px solid var(--border);border-radius:18px}
+.stat{padding:15px}
+.stat-value{font-size:25px;font-weight:800;margin:5px 0}
+.card{padding:17px;margin:12px 0}
+.card p{line-height:1.55}
+.primary,.secondary,.danger{border:0;border-radius:13px;padding:13px 15px;font-weight:800;color:#fff;margin-top:12px}
+.primary{background:var(--orange)}
+.secondary{background:var(--card2);border:1px solid var(--border)}
+.danger{background:var(--red)}
+.full{width:100%}
+.progress-track{height:14px;background:var(--card2);border-radius:99px;overflow:hidden;margin-top:10px}
+.progress-bar{height:100%;background:var(--orange)}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#10141cf2;border-top:1px solid var(--border);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:10}
+.nav-inner{width:min(860px,100%);display:grid;grid-template-columns:repeat(5,1fr)}
+.nav button{background:none;border:0;color:var(--muted);padding:11px 4px 9px;font-size:11px}
+.nav button.active{color:var(--orange)}
+.nav .icon{display:block;font-size:21px;margin-bottom:2px}
+.mission{display:flex;align-items:center;gap:13px;padding:15px;margin:9px 0}
+.mission.done{border-color:var(--green);background:#13251c}
+.check{width:29px;height:29px;border:2px solid var(--muted);border-radius:9px;display:grid;place-items:center;flex:0 0 auto}
+.mission.done .check{background:var(--green);border-color:var(--green);color:#05140b;font-weight:900}
+.grow{flex:1}
+.row{display:flex;gap:10px;align-items:center}
+.wrap{flex-wrap:wrap}
+.input{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--text);padding:13px;margin:5px 0}
+textarea.input{min-height:95px;resize:vertical}
+.exercise{border-top:1px solid var(--border);padding-top:14px;margin-top:14px}
+.exercise:first-child{border-top:0;padding-top:0;margin-top:0}
+.badge{display:inline-block;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:800;background:var(--card2);color:var(--muted)}
+.badge.good{background:#173524;color:var(--green)}
+.badge.warn{background:#342517;color:var(--orange)}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.pill{border:0;border-radius:999px;background:var(--card2);color:var(--text);padding:9px 12px;font-weight:700}
+.pill.active{background:var(--orange)}
+.history-row{padding:14px;margin:8px 0}
+.modal{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;padding:18px 16px 100px}
+.modal-head{max-width:860px;margin:0 auto 10px;display:flex;justify-content:space-between;align-items:center}
+.timer-overlay{position:fixed;inset:0;background:#000b;display:grid;place-items:center;z-index:30;padding:20px}
+.timer-card{width:min(360px,100%);background:var(--card);border:1px solid var(--border);border-radius:24px;text-align:center;padding:28px}
+.timer-num{font-size:78px;font-weight:900;margin:12px 0}
+.toast{position:fixed;top:18px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--green);border-radius:14px;padding:12px 16px;z-index:50}
+.install-note{background:#172033;border:1px solid #2f4b7d}
+.small{font-size:12px}
+@media(min-width:700px){
+  .grid{grid-template-columns:repeat(4,1fr)}
+  .desktop-two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+}
