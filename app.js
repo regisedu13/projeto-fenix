@@ -176,8 +176,108 @@ function more(){
 }
 function journal(){
   const j=save.journals[today()]||{energia:5,humor:5,fumar:0,doce:0,sono:"",obs:""};
-  return `<section class="card"><div class="row"><h2 class="grow">Diário de bordo</h2><span class="badge ${save.journals[today()]?"good":"warn"}">${save.journals[today()]?"Salvo hoje":"Novo registro"}</span></div>
-  <input id="j-energia" class="input" value="${j.energia}" placeholder="Energia 0–10" inputmode="numeric"><input id="j-humor" class="input" value="${j.humor}" placeholder="Humor 0–10" inputmode="numeric"><input id="j-fumar" class="input" value="${j.fumar}" placeholder="Vontade de fumar 0–10" inputmode="numeric"><input id="j-doce" class="input" value="${j.doce}" placeholder="Vontade de doce 0–10" inputmode="numeric"><input id="j-sono" class="input" value="${j.sono}" placeholder="Horas de sono" inputmode="decimal"><textarea id="j-obs" class="input" placeholder="Observação do dia">${esc(j.obs)}</textarea><button class="primary full" data-save-journal>SALVAR DIÁRIO</button></section>`;
+  const registros=Object.entries(save.journals)
+    .sort((a,b)=>b[0].localeCompare(a[0]))
+    .slice(0,7);
+
+  const status=diaryStatus(j);
+  return `<section class="card diary-card">
+    <div class="row">
+      <div class="grow">
+        <div class="eyebrow">Relatório diário</div>
+        <h2>Diário de bordo</h2>
+        <p class="muted">${formatDate(today())} • Dia ${currentDay()} de 45</p>
+      </div>
+      <span class="badge ${save.journals[today()]?"good":"warn"}">${save.journals[today()]?"Salvo hoje":"Novo registro"}</span>
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-energia">Energia</label>
+      <p class="diary-help">Como seu corpo respondeu hoje?</p>
+      <div class="diary-scale-head"><span>0 • Exausto</span><strong id="v-energia">${j.energia}</strong><span>10 • Ligado no 220</span></div>
+      <input id="j-energia" class="range-red" type="range" min="0" max="10" step="1" value="${j.energia}" data-output="v-energia">
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-humor">Humor</label>
+      <p class="diary-help">Como você passou a maior parte do dia?</p>
+      <div class="diary-scale-head"><span>0 • Péssimo</span><strong id="v-humor">${j.humor}</strong><span>10 • Excelente</span></div>
+      <input id="j-humor" class="range-red" type="range" min="0" max="10" step="1" value="${j.humor}" data-output="v-humor">
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-fumar">Fissura por cigarro</label>
+      <p class="diary-help">Em algum momento você teve vontade de fumar?</p>
+      <div class="diary-scale-head"><span>0 • Nem lembrei</span><strong id="v-fumar">${j.fumar}</strong><span>10 • Quase cedi</span></div>
+      <input id="j-fumar" class="range-red" type="range" min="0" max="10" step="1" value="${j.fumar}" data-output="v-fumar">
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-doce">Vontade de doce</label>
+      <p class="diary-help">O açúcar tentou negociar com você hoje?</p>
+      <div class="diary-scale-head"><span>0 • Nenhuma</span><strong id="v-doce">${j.doce}</strong><span>10 • Muito forte</span></div>
+      <input id="j-doce" class="range-red" type="range" min="0" max="10" step="1" value="${j.doce}" data-output="v-doce">
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-sono">Sono</label>
+      <p class="diary-help">Quantas horas você realmente dormiu?</p>
+      <input id="j-sono" class="input" value="${j.sono}" placeholder="Ex.: 6,5" inputmode="decimal">
+    </div>
+
+    <div class="diary-block">
+      <label class="diary-label" for="j-obs">Relatório do dia</label>
+      <p class="diary-help">O que aconteceu? Vale registrar dificuldades, vitórias, cargas e gatilhos.</p>
+      <textarea id="j-obs" class="input diary-textarea" placeholder="Ex.: Quase fumei depois do trabalho, mas fui treinar. Aumentei 5 kg no supino.">${esc(j.obs)}</textarea>
+    </div>
+
+    <button class="primary full" data-save-journal>${save.journals[today()]?"ATUALIZAR DIÁRIO":"SALVAR DIÁRIO"}</button>
+  </section>
+
+  ${save.journals[today()]?`
+  <section class="card diary-summary">
+    <div class="eyebrow">Resumo automático</div>
+    <h2>${status.title}</h2>
+    <p>${status.text}</p>
+    <div class="diary-summary-grid">
+      <div><span>Energia</span><strong>${j.energia}</strong></div>
+      <div><span>Humor</span><strong>${j.humor}</strong></div>
+      <div><span>Fissura</span><strong>${j.fumar}</strong></div>
+      <div><span>Doces</span><strong>${j.doce}</strong></div>
+      <div><span>Sono</span><strong>${j.sono||"—"}h</strong></div>
+    </div>
+  </section>`:""}
+
+  <section class="card">
+    <div class="eyebrow">Histórico recente</div>
+    <h2>Últimos registros</h2>
+    ${registros.length?registros.map(([data,r])=>{
+      const s=diaryStatus(r);
+      return `<details class="diary-history">
+        <summary><span><strong>${formatDate(data)}</strong><small>${s.title}</small></span><span class="badge">${r.energia}/10</span></summary>
+        <div class="diary-history-body">
+          <p><strong>Energia:</strong> ${r.energia} • <strong>Humor:</strong> ${r.humor}</p>
+          <p><strong>Fissura:</strong> ${r.fumar} • <strong>Doces:</strong> ${r.doce} • <strong>Sono:</strong> ${r.sono||"—"}h</p>
+          ${r.obs?`<p class="diary-note">${esc(r.obs)}</p>`:""}
+        </div>
+      </details>`;
+    }).join(""):`<p class="muted">Nenhum diário salvo ainda.</p>`}
+  </section>`;
+}
+
+function formatDate(iso){
+  const [y,m,d]=iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function diaryStatus(j){
+  const energia=Number(j.energia||0), humor=Number(j.humor||0), fumar=Number(j.fumar||0), doce=Number(j.doce||0), sono=Number(j.sono||0);
+  const base=(energia+humor)/2;
+  const pressao=(fumar+doce)/2;
+  if(humor<=3 || energia<=2 || fumar>=9) return {title:"Zona crítica",text:"O dia exigiu bastante. Reduza a pressão, evite gatilhos e trate amanhã como uma nova rodada, não como continuação do dano."};
+  if(pressao>=7 || sono>0 && sono<5) return {title:"Atenção elevada",text:"Fissuras ou sono baixo aumentaram o risco de decisões impulsivas. Deixe o próximo passo simples e previsível."};
+  if(base>=8 && pressao<=3) return {title:"Dia forte",text:"Energia e humor altos, com pouca pressão de cigarro e doce. Bom terreno para consolidar a rotina."};
+  if(base>=6 && pressao<=5) return {title:"Estável",text:"O dia ficou sob controle. Não precisa ser épico para contar como avanço."};
+  return {title:"Dia oscilante",text:"Houve desgaste, mas o registro permite enxergar o padrão. Ajuste o próximo dia sem transformar dificuldade em sentença."};
 }
 function achievements(){
   const lv=levelFromXP(totalXP()).level;
@@ -201,6 +301,11 @@ function backup(){
   <section class="card"><h2>Zona de perigo</h2><p class="muted">Apaga todos os dados deste aparelho.</p><button class="danger full" data-reset>APAGAR TODO O SAVE</button></section>`;
 }
 function bind(){
+  document.querySelectorAll(".range-red").forEach(r=>r.oninput=()=>{
+    const out=document.getElementById(r.dataset.output);
+    if(out) out.textContent=r.value;
+  });
+
   document.querySelectorAll("[data-screen]").forEach(b=>b.onclick=()=>{screen=b.dataset.screen;render();});
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{screen=b.dataset.go;render();});
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{moreTab=b.dataset.tab;render();});

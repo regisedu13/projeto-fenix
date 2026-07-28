@@ -74,3 +74,19 @@ Depois de publicar, abra o app com internet uma vez. Se o visual antigo continua
 1. feche o aplicativo;
 2. abra novamente;
 3. no Safari, recarregue a página uma vez.
+
+
+## V1.2 — Diário de Bordo
+
+O Diário foi reformulado sem alterar o restante do aplicativo:
+
+- perguntas claras em cada campo;
+- escalas visuais de 0 a 10;
+- explicações dos extremos;
+- relatório livre do dia;
+- resumo automático;
+- histórico dos últimos sete registros;
+- atualização do registro do mesmo dia;
+- mesma chave de save da V1.
+
+Os dados anteriores permanecem compatíveis.
