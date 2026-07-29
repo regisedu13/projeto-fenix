@@ -121,3 +121,18 @@ O save das versões anteriores continua compatível.
 - histórico de carga calculado uma única vez por exercício;
 - recuperação automática caso um rascunho esteja corrompido;
 - fallback visual em vez de tela travada.
+
+
+## V1.4.2 — Tela de treino refeita
+
+A tela de treino deixou de ser um modal de tela cheia e virou uma página normal do aplicativo.
+
+Correções:
+- rolagem vertical normal no iPhone;
+- botão Sair sempre visível;
+- saída sem perder o rascunho;
+- botão Continuar treino na lista;
+- cabeçalho fixo;
+- campos salvos enquanto são preenchidos;
+- compatibilidade com a área segura do iPhone;
+- nenhuma trava de `body` ou viewport.

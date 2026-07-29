@@ -537,3 +537,131 @@ h2{
 .update-banner{position:fixed;left:14px;right:14px;bottom:82px;z-index:100;max-width:620px;margin:auto;display:flex;justify-content:space-between;align-items:center;padding:13px 15px;background:#111;border:1px solid #d3162d;border-radius:14px;box-shadow:0 15px 45px #000}.update-banner button{background:#d20a1f;color:#fff;border:0;border-radius:10px;padding:9px 12px;font-weight:800}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media(min-width:700px){.analytics-grid{grid-template-columns:repeat(3,1fr)}.calendar45{grid-template-columns:repeat(9,1fr)}}
+
+
+/* V1.4.2 — Treino como página rolável */
+.workout-page{
+  min-height:100vh;
+  background:
+    radial-gradient(circle at 50% -10%,rgba(210,10,31,.14),transparent 32%),
+    var(--bg);
+}
+.workout-page-header{
+  position:sticky;
+  top:0;
+  z-index:40;
+  min-height:68px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
+  background:rgba(5,5,5,.96);
+  border-bottom:1px solid #2b2b2b;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+.workout-back,.workout-save-top{
+  margin:0;
+  min-width:74px;
+  padding:10px 12px;
+}
+.workout-head-title{
+  min-width:0;
+  text-align:center;
+}
+.workout-head-title strong{
+  display:block;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.workout-content{
+  padding-top:18px;
+  padding-bottom:calc(40px + env(safe-area-inset-bottom));
+}
+.workout-exercise-card{
+  overflow:visible;
+  padding-top:20px;
+}
+.exercise-index{
+  width:31px;
+  height:31px;
+  display:grid;
+  place-items:center;
+  margin-bottom:10px;
+  border-radius:50%;
+  font-size:13px;
+  font-weight:900;
+  color:#fff;
+  background:linear-gradient(145deg,#ef1c35,#75000e);
+  border:1px solid #ff4154;
+  box-shadow:0 0 17px rgba(210,10,31,.25);
+}
+.workout-input-grid{
+  display:grid;
+  grid-template-columns:1fr 1.25fr .72fr;
+  gap:8px;
+  margin-top:12px;
+}
+.workout-input-grid label span{
+  display:block;
+  margin:0 0 3px 2px;
+  color:#8f8f8f;
+  font-size:10px;
+  font-weight:700;
+}
+.workout-input-grid .input{
+  min-width:0;
+  margin:0;
+}
+.workout-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+  margin-top:12px;
+}
+.workout-actions button{
+  width:100%;
+  margin:0;
+}
+.workout-bottom-actions{
+  display:grid;
+  gap:8px;
+  padding:12px 0 30px;
+}
+.resume-workout{
+  border-color:#7b1724;
+  background:
+    linear-gradient(110deg,rgba(210,10,31,.15),transparent 58%),
+    #101010;
+}
+body:has(.workout-page){
+  overflow:auto !important;
+  position:static !important;
+  height:auto !important;
+  touch-action:auto !important;
+}
+html:has(.workout-page){
+  overflow:auto !important;
+  height:auto !important;
+}
+@media(max-width:390px){
+  .workout-page-header{
+    grid-template-columns:67px 1fr 67px;
+    padding-left:8px;
+    padding-right:8px;
+  }
+  .workout-back,.workout-save-top{
+    min-width:0;
+    padding:9px 7px;
+    font-size:11px;
+  }
+  .workout-input-grid{
+    grid-template-columns:1fr 1fr;
+  }
+  .workout-input-grid label:last-child{
+    grid-column:1/-1;
+  }
+}
