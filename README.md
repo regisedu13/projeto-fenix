@@ -136,3 +136,20 @@ Correções:
 - campos salvos enquanto são preenchidos;
 - compatibilidade com a área segura do iPhone;
 - nenhuma trava de `body` ou viewport.
+
+
+## V1.5 Expansion
+
+Novos módulos:
+
+- placar de consistência de 0 a 100;
+- cigarros evitados e economia estimada em reais;
+- registro completo de cardio;
+- cardio marca automaticamente a missão diária;
+- medidas corporais: peso, cintura, abdômen, peito, braço e coxa;
+- evolução de cada medida;
+- revisão semanal com comparação de tendências;
+- arquivo de vitórias, dificuldades e ajustes;
+- novos campos no perfil para referência do consumo de cigarro.
+
+A chave do save e os dados anteriores continuam compatíveis.

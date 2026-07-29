@@ -95,6 +95,8 @@ function normalizeSave(data){
     profile:{...base.profile,...(data.profile||{})},
     days:data.days||{},
     measurements:Array.isArray(data.measurements)?data.measurements:[],
+    cardioLogs:Array.isArray(data.cardioLogs)?data.cardioLogs:[],
+    weeklyReviews:data.weeklyReviews||{},
     workouts,
     journals:data.journals||{},
     achievements:data.achievements||{},
@@ -126,7 +128,7 @@ function recentMissionDays(limit=14){
 }
 
 
-const APP_VERSION="1.4.2";
+const APP_VERSION="1.5.0";
 const ACHIEVEMENTS=[
   ["first_workout","Primeira Gota","Conclua o primeiro treino.",()=>totalTrainings()>=1],
   ["three_workouts","Motor Aquecido","Conclua 3 treinos.",()=>totalTrainings()>=3],
@@ -227,12 +229,85 @@ function backupDue(){
   return daysBetween(new Date(save.backupMeta.lastBackup+"T12:00:00"),new Date())>=7;
 }
 
+
+function currencyBRL(value){
+  return Number(value||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+}
+function smokeEconomy(){
+  const days=missionStats("sem_cigarro").total;
+  const perDay=Number(save.profile.cigarrosDia||0);
+  const perPack=Math.max(1,Number(save.profile.cigarrosMaco||20));
+  const packPrice=Number(save.profile.precoMaco||0);
+  const cigarettes=days*perDay;
+  return {days,cigarettes,money:(cigarettes/perPack)*packPrice};
+}
+function consistencyScore(){
+  const rows=campaignDays().filter(r=>r.date<=today());
+  if(!rows.length)return 0;
+  let points=0, possible=0;
+  for(const r of rows){
+    points+=completedMissionCount(r.day);
+    possible+=MISSIONS.length;
+    if(r.journal)points+=1;
+    possible+=1;
+  }
+  return Math.round(points/Math.max(1,possible)*100);
+}
+function weekNumberForDate(iso){
+  const start=new Date(save.profile.dataInicio+"T12:00:00");
+  const d=new Date(iso+"T12:00:00");
+  return Math.max(1,Math.floor((d-start)/86400000/7)+1);
+}
+function currentWeek(){return Math.min(7,weekNumberForDate(today()));}
+function weeklySummary(week=currentWeek()){
+  const start=new Date(save.profile.dataInicio+"T12:00:00");
+  start.setDate(start.getDate()+(week-1)*7);
+  const dates=[];
+  for(let i=0;i<7;i++){const d=new Date(start);d.setDate(start.getDate()+i);dates.push(today(d));}
+  const dayRows=dates.map(d=>save.days[d]||null);
+  const journals=dates.map(d=>save.journals[d]).filter(Boolean);
+  const workouts=save.workouts.filter(w=>dates.includes(w.data));
+  const cardio=save.cardioLogs.filter(c=>dates.includes(c.data));
+  const avg=(arr,key)=>arr.length?arr.reduce((s,x)=>s+Number(x[key]||0),0)/arr.length:0;
+  return {
+    week,dates,
+    missions:dayRows.reduce((s,d)=>s+completedMissionCount(d),0),
+    possible:dates.length*MISSIONS.length,
+    workouts:workouts.length,
+    cardioMinutes:cardio.reduce((s,c)=>s+Number(c.minutos||0),0),
+    avgEnergy:avg(journals,"energia"),
+    avgMood:avg(journals,"humor"),
+    avgSmoke:avg(journals,"fumar"),
+    avgSleep:avg(journals,"sono"),
+  };
+}
+function trendLabel(current,previous,invert=false){
+  if(previous===null||previous===undefined)return "sem comparação";
+  const diff=current-previous;
+  if(Math.abs(diff)<0.15)return "estável";
+  const better=invert?diff<0:diff>0;
+  return better?"melhorando":"atenção";
+}
+function latestMeasurementValue(key){
+  const item=save.measurements.find(m=>m[key]!==null&&m[key]!==undefined&&m[key]!=="");
+  return item?Number(item[key]):null;
+}
+function firstMeasurementValue(key){
+  const rows=[...save.measurements].reverse().filter(m=>m[key]!==null&&m[key]!==undefined&&m[key]!=="");
+  return rows.length?Number(rows[0][key]):null;
+}
+
 function defaultSave(){
   return {
     version:1,
-    profile:{nome:"Régis",altura:1.68,pesoInicial:120,metaPeso:110,dataInicio:today(),duracao:45},
+    profile:{
+      nome:"Régis",altura:1.68,pesoInicial:120,metaPeso:110,dataInicio:today(),duracao:45,
+      cigarrosDia:10,precoMaco:12,cigarrosMaco:20
+    },
     days:{},
     measurements:[],
+    cardioLogs:[],
+    weeklyReviews:{},
     workouts:[],
     journals:{},
     achievements:{},
@@ -325,6 +400,15 @@ function dashboard(){
   <section class="card install-note"><div class="eyebrow">Instalação no iPhone</div><h2>Use “Adicionar à Tela de Início”</h2><p class="muted">Abra esta página no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</p></section>
   <section class="card"><div class="eyebrow">Próxima missão principal</div><h2>Treino ${nextWorkoutKey()} • ${WORKOUTS[nextWorkoutKey()].title.split("•")[1]}</h2><p>A rotação segue o último treino concluído. Faltar um dia não pula a sequência.</p><button class="primary full" data-start-workout="${nextWorkoutKey()}">INICIAR TREINO ${nextWorkoutKey()}</button></section>
   ${backupDue()?`<section class="card backup-warning"><div class="eyebrow">Proteção do save</div><h2>Backup recomendado</h2><p class="muted">Seu último backup tem mais de sete dias ou ainda não existe.</p><button class="secondary full" data-go-backup>ABRIR BACKUP</button></section>`:""}
+  <section class="card dashboard-expansion">
+    <div class="eyebrow">Placar da campanha</div>
+    <h2>Consistência: ${consistencyScore()}%</h2>
+    <div class="score-ring" style="--score:${consistencyScore()*3.6}deg"><strong>${consistencyScore()}</strong><span>/100</span></div>
+    <div class="economy-strip">
+      <div><span>Cigarros evitados</span><strong>${smokeEconomy().cigarettes}</strong></div>
+      <div><span>Economia estimada</span><strong>${currencyBRL(smokeEconomy().money)}</strong></div>
+    </div>
+  </section>
   <section class="card"><div class="eyebrow">Boss da semana ${week}</div><h2>${boss[0]}</h2><p class="muted">${boss[1]}</p></section>
   <section class="card"><div class="eyebrow">Campanha</div><div class="progress-track"><div class="progress-bar" style="width:${day/45*100}%"></div></div></section>`;
 }
@@ -406,16 +490,44 @@ function timerModal(){
   return `<div class="timer-overlay"><div class="timer-card"><div class="eyebrow">Descanso</div><div class="timer-num">${timerValue===0?"VAI!":timerValue}</div><div class="row"><button class="secondary grow" data-plus-timer>+30s</button><button class="primary grow" data-close-timer>Fechar</button></div></div></div>`;
 }
 function progress(){
-  return `<h1>Progresso</h1><p class="muted">Registre uma vez por semana, nas mesmas condições.</p>
-  <section class="card"><input id="peso" class="input" placeholder="Peso em kg" inputmode="decimal"><input id="cintura" class="input" placeholder="Cintura em cm" inputmode="decimal"><button class="primary full" data-save-measure>REGISTRAR</button></section>
-  <h2>Histórico</h2>${save.measurements.length?save.measurements.map(m=>`<div class="history-row"><strong>${m.data}</strong><div class="muted">${m.peso} kg${m.cintura?` • ${m.cintura} cm`:""}</div></div>`).join(""):`<p class="muted">Nenhuma medição ainda.</p>`}`;
+  const fields=[
+    ["peso","Peso em kg"],["cintura","Cintura em cm"],["abdomen","Abdômen em cm"],
+    ["peito","Peito em cm"],["braco","Braço em cm"],["coxa","Coxa em cm"]
+  ];
+  return `<h1>Progresso corporal</h1><p class="muted">Registre nas mesmas condições. Não é necessário preencher todos os campos sempre.</p>
+  <section class="card">
+    <div class="measurement-grid">
+      ${fields.map(([id,label])=>`<label><span>${label}</span><input id="m-${id}" class="input" placeholder="${label}" inputmode="decimal"></label>`).join("")}
+    </div>
+    <textarea id="m-obs" class="input" placeholder="Observação da medição"></textarea>
+    <button class="primary full" data-save-measure>REGISTRAR MEDIÇÃO</button>
+  </section>
+  <section class="card"><div class="eyebrow">Mudança desde o primeiro registro</div><h2>Evolução das medidas</h2>
+    <div class="measure-change-grid">
+      ${fields.map(([id,label])=>measureChange(id,label)).join("")}
+    </div>
+  </section>
+  <h2>Histórico</h2>
+  ${save.measurements.length?save.measurements.map(m=>`<details class="history-row measurement-history"><summary><strong>${formatDate(m.data)}</strong><span>${m.peso?m.peso+" kg":"medidas"}</span></summary><div class="measurement-details">${fields.map(([id,label])=>m[id]!==null&&m[id]!==undefined&&m[id]!==""?`<p><strong>${label}:</strong> ${m[id]}</p>`:"").join("")}${m.obs?`<p class="diary-note">${esc(m.obs)}</p>`:""}</div></details>`).join(""):`<p class="muted">Nenhuma medição ainda.</p>`}`;
+}
+function measureChange(key,label){
+  const first=firstMeasurementValue(key),latest=latestMeasurementValue(key);
+  if(first===null||latest===null)return `<div class="metric"><span>${label}</span><strong>—</strong><small>sem dados</small></div>`;
+  const diff=latest-first;
+  return `<div class="metric"><span>${label}</span><strong>${diff>0?"+":""}${diff.toFixed(1)}</strong><small>atual: ${latest}</small></div>`;
 }
 function more(){
-  const tabs=[["diario","Diário"],["estatisticas","Estatísticas"],["calendario","Calendário"],["cargas","Cargas"],["conquistas","Conquistas"],["historico","Histórico"],["perfil","Perfil"],["backup","Backup"]];
+  const tabs=[
+    ["diario","Diário"],["estatisticas","Estatísticas"],["semanal","Revisão semanal"],
+    ["calendario","Calendário"],["cardio","Cardio"],["cargas","Cargas"],
+    ["conquistas","Conquistas"],["historico","Histórico"],["perfil","Perfil"],["backup","Backup"]
+  ];
   let content="";
   if(moreTab==="diario") content=journal();
   if(moreTab==="estatisticas") content=statistics();
   if(moreTab==="calendario") content=calendar45();
+  if(moreTab==="semanal") content=weeklyReview();
+  if(moreTab==="cardio") content=cardioView();
   if(moreTab==="cargas") content=loads();
   if(moreTab==="conquistas") content=achievements();
   if(moreTab==="historico") content=history();
@@ -583,6 +695,55 @@ function dayDetail(iso){
     <p><strong>Medição:</strong> ${r.measurements.length?r.measurements.map(m=>`${m.peso} kg`).join(", "):"nenhuma"}</p>
   </section>`;
 }
+
+function cardioView(){
+  return `<section class="card"><div class="eyebrow">Condicionamento</div><h2>Registrar cardio</h2>
+    <select id="c-tipo" class="input">
+      <option value="Caminhada">Caminhada</option><option value="Esteira">Esteira</option>
+      <option value="Bicicleta">Bicicleta</option><option value="Elíptico">Elíptico</option>
+      <option value="Escada">Escada</option><option value="Outro">Outro</option>
+    </select>
+    <div class="row">
+      <input id="c-minutos" class="input" placeholder="Minutos" inputmode="numeric">
+      <input id="c-distancia" class="input" placeholder="Distância km" inputmode="decimal">
+    </div>
+    <input id="c-intensidade" class="input" placeholder="Intensidade percebida 0–10" inputmode="numeric">
+    <textarea id="c-obs" class="input" placeholder="Observação"></textarea>
+    <button class="primary full" data-save-cardio>SALVAR CARDIO</button>
+  </section>
+  <section class="card"><div class="eyebrow">Resumo</div><h2>${save.cardioLogs.reduce((s,c)=>s+Number(c.minutos||0),0)} minutos acumulados</h2>
+    <div class="analytics-grid">
+      ${metric("Sessões",save.cardioLogs.length,"registradas")}
+      ${metric("Esta semana",weeklySummary().cardioMinutes+" min","acumulados")}
+      ${metric("Média",save.cardioLogs.length?Math.round(save.cardioLogs.reduce((s,c)=>s+Number(c.minutos||0),0)/save.cardioLogs.length)+" min":"—","por sessão")}
+    </div>
+  </section>
+  <h2>Histórico de cardio</h2>
+  ${save.cardioLogs.length?save.cardioLogs.map(c=>`<div class="history-row"><strong>${formatDate(c.data)} • ${esc(c.tipo)}</strong><div class="muted">${c.minutos} min${c.distancia?` • ${c.distancia} km`:""}${c.intensidade?` • intensidade ${c.intensidade}/10`:""}</div>${c.obs?`<p class="small">${esc(c.obs)}</p>`:""}</div>`).join(""):`<p class="muted">Nenhum cardio registrado.</p>`}`;
+}
+function weeklyReview(){
+  const w=weeklySummary();
+  const prev=w.week>1?weeklySummary(w.week-1):null;
+  const savedReview=save.weeklyReviews[String(w.week)]||{vitoria:"",dificuldade:"",ajuste:""};
+  return `<section class="card"><div class="eyebrow">Semana ${w.week}</div><h2>Revisão semanal</h2>
+    <div class="analytics-grid">
+      ${metric("Missões",Math.round(w.missions/Math.max(1,w.possible)*100)+"%","concluídas")}
+      ${metric("Treinos",w.workouts,"na semana")}
+      ${metric("Cardio",w.cardioMinutes+" min","na semana")}
+      ${metric("Sono",w.avgSleep.toFixed(1)+"h",prev?trendLabel(w.avgSleep,prev.avgSleep):"sem comparação")}
+      ${metric("Energia",w.avgEnergy.toFixed(1)+"/10",prev?trendLabel(w.avgEnergy,prev.avgEnergy):"sem comparação")}
+      ${metric("Fissura",w.avgSmoke.toFixed(1)+"/10",prev?trendLabel(w.avgSmoke,prev.avgSmoke,true):"sem comparação")}
+    </div>
+  </section>
+  <section class="card">
+    <label class="diary-label">Maior vitória da semana</label><textarea id="wr-vitoria" class="input" placeholder="O que funcionou?">${esc(savedReview.vitoria)}</textarea>
+    <label class="diary-label">Maior dificuldade</label><textarea id="wr-dificuldade" class="input" placeholder="Onde a rotina apertou?">${esc(savedReview.dificuldade)}</textarea>
+    <label class="diary-label">Ajuste para a próxima semana</label><textarea id="wr-ajuste" class="input" placeholder="Uma mudança simples e objetiva.">${esc(savedReview.ajuste)}</textarea>
+    <button class="primary full" data-save-weekly>SALVAR REVISÃO</button>
+  </section>
+  ${Object.keys(save.weeklyReviews).length?`<section class="card"><div class="eyebrow">Arquivo</div><h2>Revisões anteriores</h2>${Object.entries(save.weeklyReviews).sort((a,b)=>Number(b[0])-Number(a[0])).map(([week,r])=>`<details class="diary-history"><summary><strong>Semana ${week}</strong></summary><div class="diary-history-body"><p><strong>Vitória:</strong> ${esc(r.vitoria||"—")}</p><p><strong>Dificuldade:</strong> ${esc(r.dificuldade||"—")}</p><p><strong>Ajuste:</strong> ${esc(r.ajuste||"—")}</p></div></details>`).join("")}</section>`:""}`;
+}
+
 function loads(){
   const names=[...new Set(Object.values(WORKOUTS).flatMap(w=>w.exercises.map(e=>e[0])))];
   return `<section class="card"><div class="eyebrow">Progressão</div><h2>Cargas por exercício</h2><p class="muted">A sugestão usa sua última carga, média de repetições e RIR registrado.</p></section>
@@ -595,7 +756,12 @@ function history(){
 }
 function profileForm(){
   const p=save.profile;
-  return `<section class="card"><h2>Perfil da campanha</h2><input id="p-nome" class="input" value="${esc(p.nome)}" placeholder="Nome"><input id="p-altura" class="input" value="${p.altura}" placeholder="Altura" inputmode="decimal"><input id="p-inicial" class="input" value="${p.pesoInicial}" placeholder="Peso inicial" inputmode="decimal"><input id="p-meta" class="input" value="${p.metaPeso}" placeholder="Meta de peso" inputmode="decimal"><input id="p-data" class="input" value="${p.dataInicio}" placeholder="AAAA-MM-DD"><button class="primary full" data-save-profile>SALVAR PERFIL</button></section>`;
+  return `<section class="card"><h2>Perfil da campanha</h2><input id="p-nome" class="input" value="${esc(p.nome)}" placeholder="Nome"><input id="p-altura" class="input" value="${p.altura}" placeholder="Altura" inputmode="decimal"><input id="p-inicial" class="input" value="${p.pesoInicial}" placeholder="Peso inicial" inputmode="decimal"><input id="p-meta" class="input" value="${p.metaPeso}" placeholder="Meta de peso" inputmode="decimal"><input id="p-data" class="input" value="${p.dataInicio}" placeholder="AAAA-MM-DD">
+  <div class="eyebrow" style="margin-top:14px">Referência do cigarro</div>
+  <input id="p-cigarros-dia" class="input" value="${p.cigarrosDia??10}" placeholder="Cigarros por dia antes de parar" inputmode="numeric">
+  <input id="p-preco-maco" class="input" value="${p.precoMaco??12}" placeholder="Preço do maço em R$" inputmode="decimal">
+  <input id="p-cigarros-maco" class="input" value="${p.cigarrosMaco??20}" placeholder="Cigarros por maço" inputmode="numeric">
+  <button class="primary full" data-save-profile>SALVAR PERFIL</button></section>`;
 }
 function backup(){
   const last=save.backupMeta?.lastBackup;
@@ -680,6 +846,8 @@ function bind(){
   const ex=document.querySelector("[data-export]"); if(ex) ex.onclick=exportBackup;
   const imp=document.getElementById("import-file"); if(imp) imp.onchange=importBackup;
   const reset=document.querySelector("[data-reset]"); if(reset) reset.onclick=resetAll;
+  const cardio=document.querySelector("[data-save-cardio]");if(cardio)cardio.onclick=saveCardio;
+  const weekly=document.querySelector("[data-save-weekly]");if(weekly)weekly.onclick=saveWeeklyReview;
   const copy=document.querySelector("[data-copy-save]"); if(copy) copy.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:APP_VERSION,save},null,2));showToast("Save copiado");}catch{alert("Não foi possível copiar automaticamente.");}};
   document.querySelectorAll("[data-campaign-day]").forEach(b=>b.onclick=()=>{const box=document.getElementById("day-detail");box.innerHTML=dayDetail(b.dataset.campaignDay);box.scrollIntoView({behavior:"smooth"});const c=box.querySelector("[data-close-day]");if(c)c.onclick=()=>box.innerHTML="";});
   const gb=document.querySelector("[data-go-backup]");if(gb)gb.onclick=()=>{screen="mais";moreTab="backup";render();};
@@ -697,17 +865,58 @@ function startTimer(sec){
 function closeTimer(){clearInterval(timerId);timerValue=null;render();}
 function num(v){return Number(String(v).replace(",","."));}
 function saveMeasure(){
-  const peso=num(document.getElementById("peso").value),c=document.getElementById("cintura").value;
-  if(!peso){alert("Informe o peso.");return;}
-  save.measurements.unshift({id:Date.now(),data:today(),peso,cintura:c?num(c):null});persist("Medição salva");render();
+  const ids=["peso","cintura","abdomen","peito","braco","coxa"];
+  const values={};
+  ids.forEach(id=>{const el=document.getElementById("m-"+id);values[id]=el&&el.value?num(el.value):null;});
+  if(!ids.some(id=>values[id]!==null)){alert("Informe ao menos uma medida.");return;}
+  save.measurements.unshift({
+    id:Date.now(),data:today(),...values,
+    obs:document.getElementById("m-obs")?.value||""
+  });
+  persist("Medição salva");
+  render();
 }
 function saveJournal(){
   save.journals[today()]={energia:num(jv("j-energia")),humor:num(jv("j-humor")),fumar:num(jv("j-fumar")),doce:num(jv("j-doce")),sono:num(jv("j-sono")),obs:jv("j-obs")};persist("Diário salvo");render();
 }
 function jv(id){return document.getElementById(id).value;}
 function saveProfile(){
-  save.profile={...save.profile,nome:jv("p-nome")||"Régis",altura:num(jv("p-altura")),pesoInicial:num(jv("p-inicial")),metaPeso:num(jv("p-meta")),dataInicio:jv("p-data")};persist("Perfil salvo");render();
+  save.profile={
+    ...save.profile,nome:jv("p-nome")||"Régis",altura:num(jv("p-altura")),
+    pesoInicial:num(jv("p-inicial")),metaPeso:num(jv("p-meta")),dataInicio:jv("p-data"),
+    cigarrosDia:num(jv("p-cigarros-dia"))||0,precoMaco:num(jv("p-preco-maco"))||0,
+    cigarrosMaco:num(jv("p-cigarros-maco"))||20
+  };persist("Perfil salvo");render();
 }
+
+function saveCardio(){
+  const minutos=num(document.getElementById("c-minutos")?.value||0);
+  if(!minutos||minutos<=0){alert("Informe os minutos de cardio.");return;}
+  save.cardioLogs.unshift({
+    id:Date.now(),data:today(),
+    tipo:document.getElementById("c-tipo")?.value||"Cardio",
+    minutos,
+    distancia:num(document.getElementById("c-distancia")?.value||0)||null,
+    intensidade:num(document.getElementById("c-intensidade")?.value||0)||null,
+    obs:document.getElementById("c-obs")?.value||""
+  });
+  const d=dayRecord();
+  if(!d.cardio){d.cardio=true;d.xp=(d.xp||0)+50;}
+  persist("Cardio salvo • +50 XP");
+  render();
+}
+function saveWeeklyReview(){
+  const week=String(currentWeek());
+  save.weeklyReviews[week]={
+    date:today(),
+    vitoria:document.getElementById("wr-vitoria")?.value||"",
+    dificuldade:document.getElementById("wr-dificuldade")?.value||"",
+    ajuste:document.getElementById("wr-ajuste")?.value||""
+  };
+  persist("Revisão semanal salva");
+  render();
+}
+
 function exportBackup(){
   save.backupMeta={lastBackup:today()};
   localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
