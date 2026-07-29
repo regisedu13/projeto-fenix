@@ -112,3 +112,12 @@ Incluído sem mudar o GitHub Pages ou a chave do save:
 - diagnóstico de armazenamento e versão.
 
 O save das versões anteriores continua compatível.
+
+
+## V1.4.1 — Correção da abertura dos treinos
+
+- compatibilidade com rascunhos e históricos de versões anteriores;
+- tela de treino tolerante a campos ausentes;
+- histórico de carga calculado uma única vez por exercício;
+- recuperação automática caso um rascunho esteja corrompido;
+- fallback visual em vez de tela travada.

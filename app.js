@@ -60,17 +60,47 @@ function today(dateObj=new Date()){
 
 function normalizeSave(data){
   const base=defaultSave();
+  const workouts=Array.isArray(data.workouts)?data.workouts.filter(Boolean).map(w=>({
+    ...w,
+    logs:Array.isArray(w.logs)?w.logs.filter(Boolean):[]
+  })):[];
+  let active=data.activeWorkout||null;
+  if(active){
+    const template=WORKOUTS[active.key];
+    if(!template||!Array.isArray(active.logs)){
+      active=null;
+    }else{
+      active={
+        ...active,
+        started:Number(active.started)||Date.now(),
+        logs:active.logs.filter(Boolean).map((log,index)=>{
+          const ex=template.exercises[index]||[];
+          return {
+            name:log.name||ex[0]||`Exercício ${index+1}`,
+            sets:log.sets||ex[1]||3,
+            target:log.target||ex[2]||"8–12",
+            rest:Number(log.rest||ex[3]||60),
+            variants:Array.isArray(log.variants)?log.variants:(Array.isArray(ex[4])?ex[4]:[]),
+            load:log.load??"",
+            reps:log.reps??"",
+            rir:log.rir??"2",
+            done:Boolean(log.done)
+          };
+        })
+      };
+    }
+  }
   return {
     ...base,...data,
     profile:{...base.profile,...(data.profile||{})},
     days:data.days||{},
-    measurements:data.measurements||[],
-    workouts:data.workouts||[],
+    measurements:Array.isArray(data.measurements)?data.measurements:[],
+    workouts,
     journals:data.journals||{},
     achievements:data.achievements||{},
     backupMeta:data.backupMeta||{lastBackup:null},
-    settings:data.settings||{lastSeenVersion:"1.4.0"},
-    activeWorkout:data.activeWorkout||null
+    settings:data.settings||{lastSeenVersion:"1.4.1"},
+    activeWorkout:active
   };
 }
 function missionStats(key){
@@ -96,7 +126,7 @@ function recentMissionDays(limit=14){
 }
 
 
-const APP_VERSION="1.4.0";
+const APP_VERSION="1.4.1";
 const ACHIEVEMENTS=[
   ["first_workout","Primeira Gota","Conclua o primeiro treino.",()=>totalTrainings()>=1],
   ["three_workouts","Motor Aquecido","Conclua 3 treinos.",()=>totalTrainings()>=3],
@@ -130,8 +160,10 @@ function nextWorkoutKey(){
   return last==="A"?"B":last==="B"?"C":"A";
 }
 function lastExerciseLog(name){
-  for(const workout of save.workouts){
-    const log=workout.logs?.find(x=>x.name===name&&x.done);
+  const workouts=Array.isArray(save.workouts)?save.workouts:[];
+  for(const workout of workouts){
+    const logs=Array.isArray(workout?.logs)?workout.logs:[];
+    const log=logs.find(x=>x&&x.name===name&&x.done);
     if(log)return log;
   }
   return null;
@@ -258,14 +290,25 @@ function appShell(content){
 }
 function stat(label,value,sub){return `<div class="stat"><div class="eyebrow">${label}</div><div class="stat-value">${value}</div><div class="muted">${sub}</div></div>`;}
 function render(){
-  let html="";
-  if(screen==="painel") html=dashboard();
-  if(screen==="missoes") html=missions();
-  if(screen==="treinos") html=workoutList();
-  if(screen==="progresso") html=progress();
-  if(screen==="mais") html=more();
-  document.getElementById("app").innerHTML=appShell(html)+(save.activeWorkout?workoutModal():"")+(timerValue!==null?timerModal():"");
-  bind();
+  try{
+    let html="";
+    if(screen==="painel") html=dashboard();
+    if(screen==="missoes") html=missions();
+    if(screen==="treinos") html=workoutList();
+    if(screen==="progresso") html=progress();
+    if(screen==="mais") html=more();
+    document.getElementById("app").innerHTML=appShell(html)+(save.activeWorkout?workoutModal():"")+(timerValue!==null?timerModal():"");
+    bind();
+  }catch(error){
+    console.error("Falha de renderização",error);
+    document.getElementById("app").innerHTML=`<main class="app-shell"><section class="card"><div class="eyebrow">Erro recuperável</div><h1>A tela tropeçou</h1><p class="muted">${esc(error?.message||"Erro desconhecido")}</p><button class="primary full" id="recover-app">VOLTAR AO PAINEL</button></section></main>`;
+    document.getElementById("recover-app").onclick=()=>{
+      save.activeWorkout=null;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+      screen="painel";
+      render();
+    };
+  }
 }
 function dashboard(){
   const day=currentDay(), xp=totalXP(), lv=levelFromXP(xp), week=Math.min(7,Math.ceil(day/7)), boss=BOSSES[week-1];
@@ -304,13 +347,27 @@ function workoutList(){
   ${Object.entries(WORKOUTS).map(([k,w])=>`<section class="card"><div class="eyebrow">Treino ${k}</div><h2>${w.title}</h2><p class="muted">${w.exercises.length} exercícios • ${w.exercises.reduce((a,e)=>a+e[1],0)} séries</p><button class="primary full" data-start-workout="${k}">INICIAR</button></section>`).join("")}`;
 }
 function workoutModal(){
-  const aw=save.activeWorkout,w=WORKOUTS[aw.key];
+  const aw=save.activeWorkout;
+  if(!aw||!WORKOUTS[aw.key])return "";
+  const w=WORKOUTS[aw.key];
+  const logs=Array.isArray(aw.logs)?aw.logs:[];
   return `<div class="modal"><div class="modal-head"><button class="secondary" data-close-workout>Fechar</button><strong>Treino ${aw.key}</strong><button class="primary" data-finish-workout>Salvar</button></div>
   <main class="app-shell" style="padding-top:0"><h1>${w.title}</h1>
-  ${aw.logs.map((log,i)=>`<section class="card"><h2>${i+1}. ${log.name}</h2><p>${log.sets} séries • ${log.target} reps • descanso ${log.rest}s • RIR alvo 2–3</p><p class="muted">Variações: ${log.variants.join(" • ")}</p>
-  ${lastExerciseLog(log.name)?`<div class="last-load"><span>Último: ${lastExerciseLog(log.name).load||0} kg • ${lastExerciseLog(log.name).reps||"—"} • RIR ${lastExerciseLog(log.name).rir}</span><strong>${progressionSuggestion(lastExerciseLog(log.name))}</strong></div>`:""}
-  <div class="row wrap"><input class="input" style="flex:1 1 110px" data-log="${i}" data-field="load" value="${esc(log.load)}" placeholder="Carga kg" inputmode="decimal"><input class="input" style="flex:1 1 130px" data-log="${i}" data-field="reps" value="${esc(log.reps)}" placeholder="12/11/10"><input class="input" style="flex:1 1 90px" data-log="${i}" data-field="rir" value="${esc(log.rir)}" placeholder="RIR" inputmode="numeric"></div>
-  <div class="row"><button class="secondary grow" data-rest="${log.rest}">Descanso ${log.rest}s</button><button class="${log.done?"primary":"secondary"} grow" data-done="${i}">${log.done?"✓ Feito":"Marcar feito"}</button></div></section>`).join("")}
+  ${logs.map((log,i)=>{
+    const previous=lastExerciseLog(log.name);
+    const variants=Array.isArray(log.variants)?log.variants:[];
+    return `<section class="card"><h2>${i+1}. ${esc(log.name)}</h2>
+    <p>${Number(log.sets)||3} séries • ${esc(log.target||"8–12")} reps • descanso ${Number(log.rest)||60}s • RIR alvo 2–3</p>
+    <p class="muted">Variações: ${variants.length?variants.map(esc).join(" • "):"sem variações cadastradas"}</p>
+    ${previous?`<div class="last-load"><span>Último: ${esc(previous.load||0)} kg • ${esc(previous.reps||"—")} • RIR ${esc(previous.rir??2)}</span><strong>${esc(progressionSuggestion(previous))}</strong></div>`:""}
+    <div class="row wrap">
+      <input class="input" style="flex:1 1 110px" data-log="${i}" data-field="load" value="${esc(log.load??"")}" placeholder="Carga kg" inputmode="decimal">
+      <input class="input" style="flex:1 1 130px" data-log="${i}" data-field="reps" value="${esc(log.reps??"")}" placeholder="12/11/10">
+      <input class="input" style="flex:1 1 90px" data-log="${i}" data-field="rir" value="${esc(log.rir??"2")}" placeholder="RIR" inputmode="numeric">
+    </div>
+    <div class="row"><button class="secondary grow" data-rest="${Number(log.rest)||60}">Descanso ${Number(log.rest)||60}s</button><button class="${log.done?"primary":"secondary"} grow" data-done="${i}">${log.done?"✓ Feito":"Marcar feito"}</button></div>
+    </section>`;
+  }).join("")}
   <button class="primary full" data-finish-workout>FINALIZAR TREINO</button></main></div>`;
 }
 function timerModal(){
@@ -532,9 +589,29 @@ function bind(){
     const d=dayRecord(),k=b.dataset.mission,xp=Number(b.dataset.xp),next=!d[k]; d[k]=next; d.xp=Math.max(0,(d.xp||0)+(next?xp:-xp)); persist(); render();
   });
   document.querySelectorAll("[data-start-workout]").forEach(b=>b.onclick=()=>{
-    const key=b.dataset.startWorkout;
-    save.activeWorkout={key,started:Date.now(),logs:WORKOUTS[key].exercises.map(e=>({name:e[0],sets:e[1],target:e[2],rest:e[3],variants:e[4],load:"",reps:"",rir:"2",done:false}))};
-    persist("Treino iniciado"); render();
+    try{
+      const key=b.dataset.startWorkout;
+      const workout=WORKOUTS[key];
+      if(!workout)throw new Error("Treino não encontrado");
+      save.activeWorkout={
+        key,
+        started:Date.now(),
+        logs:workout.exercises.map(e=>({
+          name:e[0],sets:e[1],target:e[2],rest:e[3],
+          variants:Array.isArray(e[4])?e[4]:[],
+          load:"",reps:"",rir:"2",done:false
+        }))
+      };
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+      showToast("Treino iniciado");
+      render();
+    }catch(error){
+      console.error("Erro ao abrir treino",error);
+      save.activeWorkout=null;
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+      alert("Não foi possível abrir o treino. O rascunho antigo foi limpo. Tente novamente.");
+      render();
+    }
   });
   document.querySelectorAll("[data-log]").forEach(i=>i.oninput=()=>{save.activeWorkout.logs[Number(i.dataset.log)][i.dataset.field]=i.value; localStorage.setItem(STORAGE_KEY,JSON.stringify(save));});
   document.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.done);save.activeWorkout.logs[i].done=!save.activeWorkout.logs[i].done;persist();render();});
