@@ -94,3 +94,21 @@ Os dados anteriores permanecem compatíveis.
 
 ## V1.3
 Missões por data local, reset diário automático, histórico, sequências atuais, melhores sequências, totais e calendário de 14 dias.
+
+
+## V1.4 Complete
+
+Incluído sem mudar o GitHub Pages ou a chave do save:
+
+- calendário completo dos 45 dias;
+- detalhes por data;
+- estatísticas de hábitos, sono, energia, humor, peso e treinos;
+- rotação automática ABC;
+- histórico e sugestão de progressão por exercício;
+- conquistas automáticas;
+- backup com validação, versão, data e lembrete semanal;
+- copiar save como texto;
+- aviso de atualização disponível;
+- diagnóstico de armazenamento e versão.
+
+O save das versões anteriores continua compatível.

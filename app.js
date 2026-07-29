@@ -68,6 +68,8 @@ function normalizeSave(data){
     workouts:data.workouts||[],
     journals:data.journals||{},
     achievements:data.achievements||{},
+    backupMeta:data.backupMeta||{lastBackup:null},
+    settings:data.settings||{lastSeenVersion:"1.4.0"},
     activeWorkout:data.activeWorkout||null
   };
 }
@@ -93,6 +95,106 @@ function recentMissionDays(limit=14){
   return rows;
 }
 
+
+const APP_VERSION="1.4.0";
+const ACHIEVEMENTS=[
+  ["first_workout","Primeira Gota","Conclua o primeiro treino.",()=>totalTrainings()>=1],
+  ["three_workouts","Motor Aquecido","Conclua 3 treinos.",()=>totalTrainings()>=3],
+  ["ten_workouts","Engrenagem","Conclua 10 treinos.",()=>totalTrainings()>=10],
+  ["smoke_3","Primeiro Fôlego","Passe 3 dias seguidos sem cigarro.",()=>missionStats("sem_cigarro").best>=3],
+  ["smoke_7","Pulmão em Revolta","Passe 7 dias seguidos sem cigarro.",()=>missionStats("sem_cigarro").best>=7],
+  ["smoke_15","Ar Mais Limpo","Passe 15 dias seguidos sem cigarro.",()=>missionStats("sem_cigarro").best>=15],
+  ["sweet_7","Domador do Açúcar","Passe 7 dias seguidos sem doces.",()=>missionStats("sem_doces").best>=7],
+  ["perfect_day","Dia Impecável","Conclua todas as missões de um dia.",()=>perfectDays()>=1],
+  ["diary_7","Cartógrafo Mental","Preencha o diário em 7 dias.",()=>Object.keys(save.journals).length>=7],
+  ["level_5","Ascensão","Alcance o nível 5.",()=>levelFromXP(totalXP()).level>=5],
+  ["campaign_end","Fênix","Chegue ao dia 45.",()=>currentDay()>=45],
+];
+function evaluateAchievements(show=false){
+  const unlocked=[];
+  for(const [code,title,desc,test] of ACHIEVEMENTS){
+    if(test()&&!save.achievements[code]){
+      save.achievements[code]={date:today(),title,desc};
+      unlocked.push(title);
+    }
+  }
+  if(unlocked.length){
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+    if(show) setTimeout(()=>alert(`Conquista desbloqueada:\n\n${unlocked.join("\n")}`),50);
+  }
+}
+function nextWorkoutKey(){
+  const completed=save.workouts.filter(w=>w&&w.key);
+  if(!completed.length)return "A";
+  const last=completed[0].key;
+  return last==="A"?"B":last==="B"?"C":"A";
+}
+function lastExerciseLog(name){
+  for(const workout of save.workouts){
+    const log=workout.logs?.find(x=>x.name===name&&x.done);
+    if(log)return log;
+  }
+  return null;
+}
+function exerciseHistory(name){
+  const rows=[];
+  for(const workout of save.workouts){
+    const log=workout.logs?.find(x=>x.name===name&&x.done);
+    if(log)rows.push({date:workout.data,workout:workout.key,...log});
+  }
+  return rows;
+}
+function repsAverage(reps){
+  const nums=String(reps||"").match(/\d+/g)?.map(Number)||[];
+  return nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:0;
+}
+function progressionSuggestion(log){
+  if(!log)return "Primeiro registro";
+  const load=Number(log.load||0), avg=repsAverage(log.reps), rir=Number(log.rir||2);
+  if(!load)return "Registre uma carga";
+  if(avg>=12&&rir>=2)return `Teste ${formatLoad(load*1.05)} kg`;
+  if(avg>=10)return `Mantenha ${formatLoad(load)} kg`;
+  return `Repita ${formatLoad(load)} kg e busque mais repetições`;
+}
+function formatLoad(v){
+  const rounded=Math.round(v*2)/2;
+  return Number.isInteger(rounded)?String(rounded):rounded.toFixed(1).replace(".",",");
+}
+function campaignDays(){
+  const rows=[];
+  const start=new Date(save.profile.dataInicio+"T12:00:00");
+  for(let i=0;i<45;i++){
+    const d=new Date(start);d.setDate(start.getDate()+i);
+    const iso=today(d);
+    rows.push({number:i+1,date:iso,day:save.days[iso]||null,journal:save.journals[iso]||null,workouts:save.workouts.filter(w=>w.data===iso),measurements:save.measurements.filter(m=>m.data===iso)});
+  }
+  return rows;
+}
+function campaignStats(){
+  const days=Object.values(save.days);
+  const missionTotal=days.reduce((s,d)=>s+completedMissionCount(d),0);
+  const possible=Math.max(1,days.length*MISSIONS.length);
+  const journals=Object.values(save.journals);
+  const avg=(arr,key)=>arr.length?(arr.reduce((s,x)=>s+Number(x[key]||0),0)/arr.length):0;
+  const first=[...save.measurements].sort((a,b)=>a.data.localeCompare(b.data))[0]?.peso??save.profile.pesoInicial;
+  const latest=latestWeight();
+  return{
+    completion:Math.round(missionTotal/possible*100),
+    avgSleep:avg(journals,"sono"),
+    avgEnergy:avg(journals,"energia"),
+    avgMood:avg(journals,"humor"),
+    avgSmoke:avg(journals,"fumar"),
+    weightChange:Number(latest)-Number(first),
+    a:save.workouts.filter(w=>w.key==="A").length,
+    b:save.workouts.filter(w=>w.key==="B").length,
+    c:save.workouts.filter(w=>w.key==="C").length,
+  };
+}
+function backupDue(){
+  if(!save.backupMeta?.lastBackup)return true;
+  return daysBetween(new Date(save.backupMeta.lastBackup+"T12:00:00"),new Date())>=7;
+}
+
 function defaultSave(){
   return {
     version:1,
@@ -102,6 +204,8 @@ function defaultSave(){
     workouts:[],
     journals:{},
     achievements:{},
+    backupMeta:{lastBackup:null},
+    settings:{lastSeenVersion:"1.4.0"},
     activeWorkout:null
   };
 }
@@ -120,6 +224,7 @@ let toastTimer=null;
 
 function persist(msg="Salvo no aparelho"){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+  evaluateAchievements(true);
   showToast(msg);
 }
 function dayRecord(){
@@ -172,7 +277,8 @@ function dashboard(){
     ${stat("CAMPANHA",`${Math.round(day/45*100)}%`,`${45-day} dias restantes`)}
   </div>
   <section class="card install-note"><div class="eyebrow">Instalação no iPhone</div><h2>Use “Adicionar à Tela de Início”</h2><p class="muted">Abra esta página no Safari, toque em Compartilhar e depois em Adicionar à Tela de Início.</p></section>
-  <section class="card"><div class="eyebrow">Missão principal</div><h2>Continuar a rotação ABC</h2><p>Abra o treino, registre cargas e conclua apenas o que realmente fez.</p><button class="primary full" data-go="treinos">ABRIR TREINOS</button></section>
+  <section class="card"><div class="eyebrow">Próxima missão principal</div><h2>Treino ${nextWorkoutKey()} • ${WORKOUTS[nextWorkoutKey()].title.split("•")[1]}</h2><p>A rotação segue o último treino concluído. Faltar um dia não pula a sequência.</p><button class="primary full" data-start-workout="${nextWorkoutKey()}">INICIAR TREINO ${nextWorkoutKey()}</button></section>
+  ${backupDue()?`<section class="card backup-warning"><div class="eyebrow">Proteção do save</div><h2>Backup recomendado</h2><p class="muted">Seu último backup tem mais de sete dias ou ainda não existe.</p><button class="secondary full" data-go-backup>ABRIR BACKUP</button></section>`:""}
   <section class="card"><div class="eyebrow">Boss da semana ${week}</div><h2>${boss[0]}</h2><p class="muted">${boss[1]}</p></section>
   <section class="card"><div class="eyebrow">Campanha</div><div class="progress-track"><div class="progress-bar" style="width:${day/45*100}%"></div></div></section>`;
 }
@@ -194,6 +300,7 @@ function missions(){
 function questStat(icon,label,s){return `<div class="quest-stat"><span class="quest-stat-icon">${icon}</span><strong>${label}</strong><small>Atual: ${s.current}</small><small>Melhor: ${s.best}</small><small>Total: ${s.total}</small></div>`;}
 function workoutList(){
   return `<h1>Treinos ABC</h1><p class="muted">Máquinas, variações e zero barra fixa. Academia cheia não ganha por W.O.</p>
+  <section class="next-workout"><div><div class="eyebrow">Rotação automática</div><strong>Próximo sugerido: Treino ${nextWorkoutKey()}</strong></div><span class="badge good">ABC contínuo</span></section>
   ${Object.entries(WORKOUTS).map(([k,w])=>`<section class="card"><div class="eyebrow">Treino ${k}</div><h2>${w.title}</h2><p class="muted">${w.exercises.length} exercícios • ${w.exercises.reduce((a,e)=>a+e[1],0)} séries</p><button class="primary full" data-start-workout="${k}">INICIAR</button></section>`).join("")}`;
 }
 function workoutModal(){
@@ -201,6 +308,7 @@ function workoutModal(){
   return `<div class="modal"><div class="modal-head"><button class="secondary" data-close-workout>Fechar</button><strong>Treino ${aw.key}</strong><button class="primary" data-finish-workout>Salvar</button></div>
   <main class="app-shell" style="padding-top:0"><h1>${w.title}</h1>
   ${aw.logs.map((log,i)=>`<section class="card"><h2>${i+1}. ${log.name}</h2><p>${log.sets} séries • ${log.target} reps • descanso ${log.rest}s • RIR alvo 2–3</p><p class="muted">Variações: ${log.variants.join(" • ")}</p>
+  ${lastExerciseLog(log.name)?`<div class="last-load"><span>Último: ${lastExerciseLog(log.name).load||0} kg • ${lastExerciseLog(log.name).reps||"—"} • RIR ${lastExerciseLog(log.name).rir}</span><strong>${progressionSuggestion(lastExerciseLog(log.name))}</strong></div>`:""}
   <div class="row wrap"><input class="input" style="flex:1 1 110px" data-log="${i}" data-field="load" value="${esc(log.load)}" placeholder="Carga kg" inputmode="decimal"><input class="input" style="flex:1 1 130px" data-log="${i}" data-field="reps" value="${esc(log.reps)}" placeholder="12/11/10"><input class="input" style="flex:1 1 90px" data-log="${i}" data-field="rir" value="${esc(log.rir)}" placeholder="RIR" inputmode="numeric"></div>
   <div class="row"><button class="secondary grow" data-rest="${log.rest}">Descanso ${log.rest}s</button><button class="${log.done?"primary":"secondary"} grow" data-done="${i}">${log.done?"✓ Feito":"Marcar feito"}</button></div></section>`).join("")}
   <button class="primary full" data-finish-workout>FINALIZAR TREINO</button></main></div>`;
@@ -214,9 +322,12 @@ function progress(){
   <h2>Histórico</h2>${save.measurements.length?save.measurements.map(m=>`<div class="history-row"><strong>${m.data}</strong><div class="muted">${m.peso} kg${m.cintura?` • ${m.cintura} cm`:""}</div></div>`).join(""):`<p class="muted">Nenhuma medição ainda.</p>`}`;
 }
 function more(){
-  const tabs=[["diario","Diário"],["conquistas","Conquistas"],["historico","Histórico"],["perfil","Perfil"],["backup","Backup"]];
+  const tabs=[["diario","Diário"],["estatisticas","Estatísticas"],["calendario","Calendário"],["cargas","Cargas"],["conquistas","Conquistas"],["historico","Histórico"],["perfil","Perfil"],["backup","Backup"]];
   let content="";
   if(moreTab==="diario") content=journal();
+  if(moreTab==="estatisticas") content=statistics();
+  if(moreTab==="calendario") content=calendar45();
+  if(moreTab==="cargas") content=loads();
   if(moreTab==="conquistas") content=achievements();
   if(moreTab==="historico") content=history();
   if(moreTab==="perfil") content=profileForm();
@@ -329,15 +440,67 @@ function diaryStatus(j){
   return {title:"Dia oscilante",text:"Houve desgaste, mas o registro permite enxergar o padrão. Ajuste o próximo dia sem transformar dificuldade em sentença."};
 }
 function achievements(){
-  const lv=levelFromXP(totalXP()).level;
-  const list=[
-    [totalTrainings()>=1,"Primeira Gota","Conclua o primeiro treino."],
-    [totalTrainings()>=10,"Engrenagem","Complete 10 treinos."],
-    [lv>=5,"Ascensão","Alcance o nível 5."],
-    [currentDay()>=45,"Fênix","Chegue ao 45º dia da campanha."]
-  ];
-  return list.map(([u,t,d])=>`<div class="history-row"><strong>${u?"🏆":"🔒"} ${t}</strong><div class="muted">${d}</div></div>`).join("");
+  evaluateAchievements(false);
+  const unlocked=ACHIEVEMENTS.filter(([code])=>save.achievements[code]).length;
+  return `<section class="card"><div class="eyebrow">Inventário</div><h2>${unlocked} de ${ACHIEVEMENTS.length} conquistas</h2><div class="progress-track"><div class="progress-bar" style="width:${unlocked/ACHIEVEMENTS.length*100}%"></div></div></section>
+  ${ACHIEVEMENTS.map(([code,title,desc])=>{const u=save.achievements[code];return `<div class="achievement-card ${u?"unlocked":""}"><span class="achievement-icon">${u?"🏆":"🔒"}</span><div class="grow"><strong>${title}</strong><p class="muted">${desc}</p>${u?`<small>Desbloqueada em ${formatDate(u.date)}</small>`:""}</div></div>`;}).join("")}`;
 }
+
+function statistics(){
+  const s=campaignStats();
+  return `<section class="card"><div class="eyebrow">Campanha em números</div><h2>Estatísticas gerais</h2>
+    <div class="analytics-grid">
+      ${metric("Missões",s.completion+"%","concluídas")}
+      ${metric("Peso",`${s.weightChange>0?"+":""}${s.weightChange.toFixed(1)} kg`,"desde o início")}
+      ${metric("Sono",s.avgSleep.toFixed(1)+"h","média")}
+      ${metric("Energia",s.avgEnergy.toFixed(1)+"/10","média")}
+      ${metric("Humor",s.avgMood.toFixed(1)+"/10","média")}
+      ${metric("Fissura",s.avgSmoke.toFixed(1)+"/10","média")}
+    </div>
+  </section>
+  <section class="card"><div class="eyebrow">Distribuição de treinos</div><h2>Rotação ABC</h2>
+    <div class="abc-bars">
+      ${abcBar("A",s.a,totalTrainings())}${abcBar("B",s.b,totalTrainings())}${abcBar("C",s.c,totalTrainings())}
+    </div>
+  </section>
+  <section class="card"><div class="eyebrow">Hábitos</div><h2>Sequências principais</h2>
+    <div class="analytics-grid">
+      ${metric("Sem cigarro",missionStats("sem_cigarro").current,"sequência atual")}
+      ${metric("Recorde cigarro",missionStats("sem_cigarro").best,"melhor sequência")}
+      ${metric("Sem doces",missionStats("sem_doces").current,"sequência atual")}
+      ${metric("Recorde doces",missionStats("sem_doces").best,"melhor sequência")}
+    </div>
+  </section>`;
+}
+function metric(label,value,sub){return `<div class="metric"><span>${label}</span><strong>${value}</strong><small>${sub}</small></div>`;}
+function abcBar(key,count,total){
+  const pct=total?Math.round(count/total*100):0;
+  return `<div class="abc-row"><strong>${key}</strong><div class="abc-track"><i style="width:${pct}%"></i></div><span>${count}</span></div>`;
+}
+function calendar45(){
+  const rows=campaignDays();
+  return `<section class="card"><div class="eyebrow">Mapa da campanha</div><h2>Os 45 dias</h2><p class="muted">Toque em um dia para abrir os detalhes registrados.</p>
+    <div class="calendar45">${rows.map(r=>{const count=completedMissionCount(r.day),state=!r.day?"empty":count===MISSIONS.length?"perfect":count>0?"partial":"failed";return `<button class="campaign-day ${state}" data-campaign-day="${r.date}"><small>${r.number}</small><strong>${r.date.slice(8)}</strong><span>${count}/${MISSIONS.length}</span></button>`;}).join("")}</div>
+  </section><div id="day-detail"></div>`;
+}
+function dayDetail(iso){
+  const r=campaignDays().find(x=>x.date===iso);if(!r)return "";
+  const d=r.day||{};
+  return `<section class="card day-detail-card"><div class="row"><div class="grow"><div class="eyebrow">Dia ${r.number}</div><h2>${formatDate(iso)}</h2></div><button class="secondary" data-close-day>Fechar</button></div>
+    <p><strong>Missões:</strong> ${completedMissionCount(d)}/${MISSIONS.length} • <strong>XP:</strong> ${d.xp||0}</p>
+    <div class="day-tags">${MISSIONS.map(([k,l])=>`<span class="${d[k]?"on":""}">${d[k]?"✓":"○"} ${l}</span>`).join("")}</div>
+    <p><strong>Treinos:</strong> ${r.workouts.length?r.workouts.map(w=>w.key).join(", "):"nenhum"}</p>
+    <p><strong>Diário:</strong> ${r.journal?`energia ${r.journal.energia}, humor ${r.journal.humor}, sono ${r.journal.sono||"—"}h`:"não preenchido"}</p>
+    <p><strong>Medição:</strong> ${r.measurements.length?r.measurements.map(m=>`${m.peso} kg`).join(", "):"nenhuma"}</p>
+  </section>`;
+}
+function loads(){
+  const names=[...new Set(Object.values(WORKOUTS).flatMap(w=>w.exercises.map(e=>e[0])))];
+  return `<section class="card"><div class="eyebrow">Progressão</div><h2>Cargas por exercício</h2><p class="muted">A sugestão usa sua última carga, média de repetições e RIR registrado.</p></section>
+  ${names.map(name=>{const last=lastExerciseLog(name),hist=exerciseHistory(name);return `<details class="load-card"><summary><div class="grow"><strong>${name}</strong><small>${last?`${last.load||0} kg • ${last.reps||"sem reps"} • RIR ${last.rir}`:"sem histórico"}</small></div><span class="badge ${last?"good":""}">${progressionSuggestion(last)}</span></summary>
+  <div class="load-history">${hist.slice(0,6).map(x=>`<div><span>${formatDate(x.date)}</span><strong>${x.load||0} kg</strong><small>${x.reps||"—"} • RIR ${x.rir}</small></div>`).join("")||`<p class="muted">Conclua esse exercício para criar o histórico.</p>`}</div></details>`;}).join("")}`;
+}
+
 function history(){
   return save.workouts.length?save.workouts.map(h=>`<div class="history-row"><strong>${h.data} • Treino ${h.key}</strong><div class="muted">${h.duration} min • concluído</div></div>`).join(""):`<p class="muted">Nenhum treino registrado.</p>`;
 }
@@ -346,7 +509,14 @@ function profileForm(){
   return `<section class="card"><h2>Perfil da campanha</h2><input id="p-nome" class="input" value="${esc(p.nome)}" placeholder="Nome"><input id="p-altura" class="input" value="${p.altura}" placeholder="Altura" inputmode="decimal"><input id="p-inicial" class="input" value="${p.pesoInicial}" placeholder="Peso inicial" inputmode="decimal"><input id="p-meta" class="input" value="${p.metaPeso}" placeholder="Meta de peso" inputmode="decimal"><input id="p-data" class="input" value="${p.dataInicio}" placeholder="AAAA-MM-DD"><button class="primary full" data-save-profile>SALVAR PERFIL</button></section>`;
 }
 function backup(){
-  return `<section class="card"><h2>Backup do save</h2><p class="muted">Exporte regularmente e guarde no iCloud Drive, Google Drive ou outro lugar seguro.</p><button class="primary full" data-export>EXPORTAR BACKUP</button><label class="secondary full" style="display:block;text-align:center;margin-top:10px">IMPORTAR BACKUP<input id="import-file" type="file" accept=".json,application/json" hidden></label></section>
+  const last=save.backupMeta?.lastBackup;
+  return `<section class="card"><div class="eyebrow">Proteção do save</div><h2>Backup local</h2>
+  <p class="muted">${last?`Último backup registrado em ${formatDate(last)}.`:"Você ainda não registrou nenhum backup."}</p>
+  <div class="backup-health ${backupDue()?"warn":"good"}"><strong>${backupDue()?"Backup recomendado":"Save protegido"}</strong><span>${backupDue()?"Exporte uma cópia agora.":"Próxima revisão em até sete dias."}</span></div>
+  <button class="primary full" data-export>EXPORTAR BACKUP</button>
+  <label class="secondary full" style="display:block;text-align:center;margin-top:10px">IMPORTAR BACKUP<input id="import-file" type="file" accept=".json,application/json" hidden></label>
+  <button class="secondary full" data-copy-save>COPIAR SAVE COMO TEXTO</button></section>
+  <section class="card"><div class="eyebrow">Diagnóstico</div><h2>Versão e armazenamento</h2><p class="muted">Versão ${APP_VERSION} • ${Object.keys(save.days).length} dias registrados • ${save.workouts.length} treinos • ${save.measurements.length} medições.</p></section>
   <section class="card"><h2>Zona de perigo</h2><p class="muted">Apaga todos os dados deste aparelho.</p><button class="danger full" data-reset>APAGAR TODO O SAVE</button></section>`;
 }
 function bind(){
@@ -379,6 +549,9 @@ function bind(){
   const ex=document.querySelector("[data-export]"); if(ex) ex.onclick=exportBackup;
   const imp=document.getElementById("import-file"); if(imp) imp.onchange=importBackup;
   const reset=document.querySelector("[data-reset]"); if(reset) reset.onclick=resetAll;
+  const copy=document.querySelector("[data-copy-save]"); if(copy) copy.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:APP_VERSION,save},null,2));showToast("Save copiado");}catch{alert("Não foi possível copiar automaticamente.");}};
+  document.querySelectorAll("[data-campaign-day]").forEach(b=>b.onclick=()=>{const box=document.getElementById("day-detail");box.innerHTML=dayDetail(b.dataset.campaignDay);box.scrollIntoView({behavior:"smooth"});const c=box.querySelector("[data-close-day]");if(c)c.onclick=()=>box.innerHTML="";});
+  const gb=document.querySelector("[data-go-backup]");if(gb)gb.onclick=()=>{screen="mais";moreTab="backup";render();};
 }
 function finishWorkout(){
   const aw=save.activeWorkout;if(!aw.logs.some(x=>x.done)){alert("Marque ao menos um exercício concluído.");return;}
@@ -405,14 +578,46 @@ function saveProfile(){
   save.profile={...save.profile,nome:jv("p-nome")||"Régis",altura:num(jv("p-altura")),pesoInicial:num(jv("p-inicial")),metaPeso:num(jv("p-meta")),dataInicio:jv("p-data")};persist("Perfil salvo");render();
 }
 function exportBackup(){
-  const blob=new Blob([JSON.stringify(save,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=`fenix-backup-${today()}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exportado");
+  save.backupMeta={lastBackup:today()};
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(save));
+  const payload={app:"Projeto Fênix",version:APP_VERSION,exportedAt:new Date().toISOString(),save};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download=`fenix-backup-v${APP_VERSION}-${today()}.json`;a.click();URL.revokeObjectURL(url);showToast("Backup exportado");render();
 }
 function importBackup(e){
-  const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{save=JSON.parse(r.result);persist("Backup importado");render();}catch{alert("Arquivo de backup inválido.");}};r.readAsText(file);
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{try{
+    const parsed=JSON.parse(r.result);
+    const incoming=parsed.save||parsed;
+    if(!incoming.profile||!incoming.days||!incoming.workouts)throw new Error("estrutura");
+    if(!confirm(`Importar backup e substituir o save atual?
+
+Dias: ${Object.keys(incoming.days).length}
+Treinos: ${incoming.workouts.length}`))return;
+    save=normalizeSave(incoming);persist("Backup importado");render();
+  }catch{alert("Arquivo de backup inválido ou incompatível.");}};
+  r.readAsText(file);
 }
 function resetAll(){if(confirm("Apagar todo o save? Esta ação não pode ser desfeita.")){save=defaultSave();persist("Save reiniciado");render();}}
 let renderedDate=today();
 render();
 setInterval(()=>{const now=today();if(now!==renderedDate){renderedDate=now;render();showToast("Novo dia iniciado • missões renovadas");}},60000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&today()!==renderedDate){renderedDate=today();render();showToast("Novo dia iniciado • missões renovadas");}});
-if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));}
+if("serviceWorker" in navigator){
+  window.addEventListener("load",async()=>{
+    const reg=await navigator.serviceWorker.register("./sw.js");
+    reg.addEventListener("updatefound",()=>{
+      const worker=reg.installing;
+      worker?.addEventListener("statechange",()=>{
+        if(worker.state==="installed"&&navigator.serviceWorker.controller){
+          const bar=document.createElement("div");
+          bar.className="update-banner";
+          bar.innerHTML=`<span>Nova versão disponível</span><button>ATUALIZAR</button>`;
+          bar.querySelector("button").onclick=()=>location.reload();
+          document.body.appendChild(bar);
+        }
+      });
+    });
+  });
+}
