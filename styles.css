@@ -503,3 +503,19 @@ h2{
 @media(max-width:520px){
   .diary-summary-grid{grid-template-columns:repeat(3,1fr)}
 }
+
+.quest-date-card{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:15px 0 12px;padding:15px;background:linear-gradient(110deg,rgba(210,10,31,.14),transparent 60%),#101010;border:1px solid #47101a;border-radius:16px}
+.quest-date-card strong{display:block;margin-top:5px;font-size:18px}
+.quest-stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
+.quest-stat{display:flex;flex-direction:column;gap:3px;min-height:132px;padding:13px;background:#090909;border:1px solid #292929;border-radius:14px}
+.quest-stat-icon{font-size:23px}.quest-stat strong{font-size:14px}.quest-stat small{color:#888;font-size:11px}
+.perfect-days{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:13px;background:#0b0b0b;border:1px solid #292929;border-radius:13px}
+.perfect-days strong{font-size:22px;color:#ff3449}
+.quest-calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-top:14px}
+.quest-day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:11px;border:1px solid #292929;background:#090909}
+.quest-day span{font-size:10px;color:#777}.quest-day strong{font-size:16px;margin-top:2px}
+.quest-day.perfect{border-color:#e01830;background:linear-gradient(145deg,#ca0d24,#63000c)}
+.quest-day.partial{border-color:#6c1722;background:#251014}.quest-day.empty{opacity:.52}
+.quest-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:13px;color:#888;font-size:11px}.quest-legend span{display:flex;align-items:center;gap:5px}.quest-legend i{width:9px;height:9px;border-radius:3px;background:#111;border:1px solid #333}.quest-legend i.perfect{background:#cf1027}.quest-legend i.partial{background:#301219}
+.campaign-streaks{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 4px}.campaign-streaks div{display:flex;flex-direction:column;gap:4px;padding:13px;border-radius:14px;border:1px solid #351017;background:linear-gradient(135deg,rgba(210,10,31,.1),transparent),#0e0e0e}.campaign-streaks span{color:#999;font-size:12px}.campaign-streaks strong{font-size:19px}
+@media(min-width:700px){.quest-stats-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}

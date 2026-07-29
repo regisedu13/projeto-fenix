@@ -90,3 +90,7 @@ O Diário foi reformulado sem alterar o restante do aplicativo:
 - mesma chave de save da V1.
 
 Os dados anteriores permanecem compatíveis.
+
+
+## V1.3
+Missões por data local, reset diário automático, histórico, sequências atuais, melhores sequências, totais e calendário de 14 dias.

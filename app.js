@@ -51,7 +51,48 @@ const BOSSES = [
  ["A FÊNIX","Terminar prova que você consegue reconstruir o próprio sistema."]
 ];
 
-function today(){ return new Date().toISOString().slice(0,10); }
+function today(dateObj=new Date()){
+  const y=dateObj.getFullYear();
+  const m=String(dateObj.getMonth()+1).padStart(2,"0");
+  const d=String(dateObj.getDate()).padStart(2,"0");
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeSave(data){
+  const base=defaultSave();
+  return {
+    ...base,...data,
+    profile:{...base.profile,...(data.profile||{})},
+    days:data.days||{},
+    measurements:data.measurements||[],
+    workouts:data.workouts||[],
+    journals:data.journals||{},
+    achievements:data.achievements||{},
+    activeWorkout:data.activeWorkout||null
+  };
+}
+function missionStats(key){
+  const entries=Object.entries(save.days).filter(([d])=>d<=today()).sort((a,b)=>a[0].localeCompare(b[0]));
+  const total=entries.reduce((s,[,d])=>s+(d[key]?1:0),0);
+  let current=0,cursor=new Date(today()+"T12:00:00");
+  while(save.days[today(cursor)]?.[key]){current++;cursor.setDate(cursor.getDate()-1);}
+  let best=0,run=0,prev=null;
+  for(const [iso,d] of entries){
+    const dt=new Date(iso+"T12:00:00");
+    const consecutive=prev && Math.round((dt-prev)/86400000)===1;
+    run=d[key]?(consecutive?run+1:1):0;
+    best=Math.max(best,run); prev=dt;
+  }
+  return {total,current,best};
+}
+function completedMissionCount(day){return MISSIONS.reduce((s,[k])=>s+(day?.[k]?1:0),0);}
+function perfectDays(){return Object.values(save.days).filter(d=>completedMissionCount(d)===MISSIONS.length).length;}
+function recentMissionDays(limit=14){
+  const rows=[],cursor=new Date(today()+"T12:00:00");
+  for(let i=0;i<limit;i++){const iso=today(cursor);rows.push([iso,save.days[iso]||null]);cursor.setDate(cursor.getDate()-1);}
+  return rows;
+}
+
 function defaultSave(){
   return {
     version:1,
@@ -67,7 +108,7 @@ function defaultSave(){
 function load(){
   try{
     const raw=localStorage.getItem(STORAGE_KEY);
-    return raw?JSON.parse(raw):defaultSave();
+    return raw?normalizeSave(JSON.parse(raw)):defaultSave();
   }catch(e){return defaultSave();}
 }
 let save=load();
@@ -124,7 +165,7 @@ function render(){
 function dashboard(){
   const day=currentDay(), xp=totalXP(), lv=levelFromXP(xp), week=Math.min(7,Math.ceil(day/7)), boss=BOSSES[week-1];
   return `<div class="topbar"><div><div class="eyebrow">Projeto Fênix</div><h1>Olá, ${esc(save.profile.nome)}</h1><p class="muted">Dia ${day} de 45 • Disciplina é motivação com crachá.</p></div></div>
-  <div class="grid">
+  <div class="campaign-streaks"><div><span>🚭 Sem cigarro</span><strong>${missionStats("sem_cigarro").current} dias</strong></div><div><span>🍬 Sem doces</span><strong>${missionStats("sem_doces").current} dias</strong></div></div><div class="grid">
     ${stat("NÍVEL",lv.level,`${lv.current}/${lv.needed} XP`)}
     ${stat("PESO",`${Number(latestWeight()).toFixed(1)} kg`,`Meta ${save.profile.metaPeso} kg`)}
     ${stat("TREINOS",totalTrainings(),"concluídos")}
@@ -136,13 +177,21 @@ function dashboard(){
   <section class="card"><div class="eyebrow">Campanha</div><div class="progress-track"><div class="progress-bar" style="width:${day/45*100}%"></div></div></section>`;
 }
 function missions(){
-  const d=dayRecord();
-  return `<h1>Missões do dia</h1><p class="muted">Marque com honestidade. O aplicativo não é fiscal, é espelho.</p>
-  ${MISSIONS.map(([k,l,xp])=>`<button class="mission ${d[k]?"done":""}" data-mission="${k}" data-xp="${xp}">
-    <span class="check">${d[k]?"✓":""}</span><span class="grow" style="text-align:left"><strong>${l}</strong><br><span class="muted">+${xp} XP</span></span>
-  </button>`).join("")}
-  <section class="card"><h2>XP de hoje: ${d.xp||0}</h2><p class="muted">Cada alteração é salva automaticamente neste aparelho.</p></section>`;
+  const d=dayRecord(),recent=recentMissionDays(14);
+  return `<h1>Missões do dia</h1>
+  <p class="muted">${formatDate(today())} • Uma ficha nova é criada automaticamente a cada dia.</p>
+  <section class="quest-date-card"><div><div class="eyebrow">Progresso de hoje</div><strong>${completedMissionCount(d)} de ${MISSIONS.length} missões</strong></div><span class="badge ${completedMissionCount(d)===MISSIONS.length?"good":"warn"}">${d.xp||0} XP</span></section>
+  ${MISSIONS.map(([k,l,xp])=>`<button class="mission ${d[k]?"done":""}" data-mission="${k}" data-xp="${xp}"><span class="check">${d[k]?"✓":""}</span><span class="grow" style="text-align:left"><strong>${l}</strong><br><span class="muted">+${xp} XP • sequência: ${missionStats(k).current} dia(s)</span></span></button>`).join("")}
+  <section class="card"><div class="eyebrow">Estatísticas da campanha</div><h2>Sequências e totais</h2><div class="quest-stats-grid">
+    ${questStat("🚭","Sem cigarro",missionStats("sem_cigarro"))}
+    ${questStat("🍬","Sem doces",missionStats("sem_doces"))}
+    ${questStat("🏋️","Treinos",missionStats("treino"))}
+    ${questStat("💧","Água",missionStats("agua"))}
+  </div><div class="perfect-days"><span>Dias perfeitos</span><strong>${perfectDays()}</strong></div></section>
+  <section class="card"><div class="eyebrow">Histórico diário</div><h2>Últimos 14 dias</h2><div class="quest-calendar">${recent.map(([iso,day])=>{const c=completedMissionCount(day),state=!day?"empty":c===MISSIONS.length?"perfect":c>0?"partial":"failed";return `<div class="quest-day ${state}"><span>${iso.slice(8)}</span><strong>${c}</strong></div>`;}).join("")}</div>
+  <div class="quest-legend"><span><i class="perfect"></i> Completo</span><span><i class="partial"></i> Parcial</span><span><i class="empty"></i> Sem registro</span></div></section>`;
 }
+function questStat(icon,label,s){return `<div class="quest-stat"><span class="quest-stat-icon">${icon}</span><strong>${label}</strong><small>Atual: ${s.current}</small><small>Melhor: ${s.best}</small><small>Total: ${s.total}</small></div>`;}
 function workoutList(){
   return `<h1>Treinos ABC</h1><p class="muted">Máquinas, variações e zero barra fixa. Academia cheia não ganha por W.O.</p>
   ${Object.entries(WORKOUTS).map(([k,w])=>`<section class="card"><div class="eyebrow">Treino ${k}</div><h2>${w.title}</h2><p class="muted">${w.exercises.length} exercícios • ${w.exercises.reduce((a,e)=>a+e[1],0)} séries</p><button class="primary full" data-start-workout="${k}">INICIAR</button></section>`).join("")}`;
@@ -362,5 +411,8 @@ function importBackup(e){
   const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=()=>{try{save=JSON.parse(r.result);persist("Backup importado");render();}catch{alert("Arquivo de backup inválido.");}};r.readAsText(file);
 }
 function resetAll(){if(confirm("Apagar todo o save? Esta ação não pode ser desfeita.")){save=defaultSave();persist("Save reiniciado");render();}}
+let renderedDate=today();
 render();
+setInterval(()=>{const now=today();if(now!==renderedDate){renderedDate=now;render();showToast("Novo dia iniciado • missões renovadas");}},60000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&today()!==renderedDate){renderedDate=today();render();showToast("Novo dia iniciado • missões renovadas");}});
 if("serviceWorker" in navigator){window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js"));}
