@@ -153,3 +153,20 @@ Novos módulos:
 - novos campos no perfil para referência do consumo de cigarro.
 
 A chave do save e os dados anteriores continuam compatíveis.
+
+
+## V1.6 — Nutrição básica
+
+- contador diário de calorias;
+- proteína, carboidratos e gorduras;
+- estimativa de gasto diário;
+- déficit ou superávit estimado;
+- alimentos básicos internos;
+- busca por alimento;
+- refeições separadas;
+- cadastro de alimento personalizado;
+- remoção de itens;
+- metas de calorias e proteína configuráveis;
+- idade, sexo e nível de atividade no perfil.
+
+Os valores nutricionais são estimativas.

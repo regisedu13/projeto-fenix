@@ -97,6 +97,8 @@ function normalizeSave(data){
     measurements:Array.isArray(data.measurements)?data.measurements:[],
     cardioLogs:Array.isArray(data.cardioLogs)?data.cardioLogs:[],
     weeklyReviews:data.weeklyReviews||{},
+    nutritionLogs:data.nutritionLogs||{},
+    customFoods:Array.isArray(data.customFoods)?data.customFoods:[],
     workouts,
     journals:data.journals||{},
     achievements:data.achievements||{},
@@ -128,7 +130,7 @@ function recentMissionDays(limit=14){
 }
 
 
-const APP_VERSION="1.5.0";
+const APP_VERSION="1.6.0";
 const ACHIEVEMENTS=[
   ["first_workout","Primeira Gota","Conclua o primeiro treino.",()=>totalTrainings()>=1],
   ["three_workouts","Motor Aquecido","Conclua 3 treinos.",()=>totalTrainings()>=3],
@@ -297,17 +299,69 @@ function firstMeasurementValue(key){
   return rows.length?Number(rows[0][key]):null;
 }
 
+
+const BASIC_FOODS=[
+  {id:"arroz_branco",name:"Arroz branco cozido",kcal:128,protein:2.5,carbs:28.1,fat:.2,unit:"100 g"},
+  {id:"feijao_carioca",name:"Feijão carioca cozido",kcal:76,protein:4.8,carbs:13.6,fat:.5,unit:"100 g"},
+  {id:"frango_grelhado",name:"Peito de frango grelhado",kcal:159,protein:32,fat:2.5,carbs:0,unit:"100 g"},
+  {id:"carne_moida",name:"Carne moída cozida",kcal:212,protein:26,fat:12,carbs:0,unit:"100 g"},
+  {id:"musculo_cozido",name:"Músculo bovino cozido",kcal:195,protein:29,fat:8,carbs:0,unit:"100 g"},
+  {id:"ovo",name:"Ovo inteiro",kcal:143,protein:13,carbs:.7,fat:9.5,unit:"100 g"},
+  {id:"pao_frances",name:"Pão francês",kcal:300,protein:9,carbs:58,fat:3.1,unit:"100 g"},
+  {id:"leite_integral",name:"Leite integral",kcal:61,protein:3.2,carbs:4.7,fat:3.3,unit:"100 ml"},
+  {id:"cafe_acucar",name:"Café com açúcar",kcal:40,protein:0,carbs:10,fat:0,unit:"100 ml"},
+  {id:"banana",name:"Banana",kcal:89,protein:1.1,carbs:22.8,fat:.3,unit:"100 g"},
+  {id:"maca",name:"Maçã",kcal:52,protein:.3,carbs:13.8,fat:.2,unit:"100 g"},
+  {id:"aveia",name:"Aveia em flocos",kcal:394,protein:13.9,carbs:66.6,fat:8.5,unit:"100 g"},
+  {id:"iogurte",name:"Iogurte natural integral",kcal:61,protein:3.5,carbs:4.7,fat:3.3,unit:"100 g"},
+  {id:"queijo_mussarela",name:"Queijo muçarela",kcal:300,protein:22,carbs:2,fat:23,unit:"100 g"},
+  {id:"batata_inglesa",name:"Batata inglesa cozida",kcal:87,protein:1.9,carbs:20.1,fat:.1,unit:"100 g"},
+  {id:"macarrao",name:"Macarrão cozido",kcal:157,protein:5.8,carbs:30.9,fat:.9,unit:"100 g"},
+  {id:"oleo",name:"Óleo de cozinha",kcal:884,protein:0,carbs:0,fat:100,unit:"100 ml"},
+  {id:"chocolate",name:"Chocolate ao leite",kcal:535,protein:7.6,carbs:59.4,fat:29.7,unit:"100 g"},
+  {id:"refrigerante",name:"Refrigerante comum",kcal:42,protein:0,carbs:10.6,fat:0,unit:"100 ml"},
+  {id:"whey",name:"Whey protein",kcal:400,protein:75,carbs:10,fat:7,unit:"100 g"}
+];
+function allFoods(){return [...BASIC_FOODS,...save.customFoods];}
+function nutritionDay(iso=today()){
+  if(!save.nutritionLogs[iso])save.nutritionLogs[iso]=[];
+  return save.nutritionLogs[iso];
+}
+function nutritionTotals(iso=today()){
+  return nutritionDay(iso).reduce((s,item)=>({
+    kcal:s.kcal+Number(item.kcal||0),
+    protein:s.protein+Number(item.protein||0),
+    carbs:s.carbs+Number(item.carbs||0),
+    fat:s.fat+Number(item.fat||0)
+  }),{kcal:0,protein:0,carbs:0,fat:0});
+}
+function estimateTDEE(){
+  const p=save.profile;
+  const weight=Number(latestWeight()||p.pesoInicial||0);
+  const height=Number(p.altura||0)*100;
+  const age=Number(p.idade||31);
+  const sexAdj=p.sexo==="feminino"?-161:5;
+  const bmr=10*weight+6.25*height-5*age+sexAdj;
+  return Math.round(bmr*Number(p.atividade||1.35));
+}
+function calorieTarget(){return Number(save.profile.metaCalorias||0)||Math.max(1200,estimateTDEE()-500);}
+function estimatedDeficit(){return estimateTDEE()-nutritionTotals().kcal;}
+function mealLabel(key){return {cafe:"Café da manhã",almoco:"Almoço",lanche:"Lanche",jantar:"Jantar",ceia:"Ceia"}[key]||key;}
+
 function defaultSave(){
   return {
     version:1,
     profile:{
       nome:"Régis",altura:1.68,pesoInicial:120,metaPeso:110,dataInicio:today(),duracao:45,
-      cigarrosDia:10,precoMaco:12,cigarrosMaco:20
+      cigarrosDia:10,precoMaco:12,cigarrosMaco:20,
+      idade:31,sexo:"masculino",atividade:1.35,metaCalorias:2300,metaProteina:150
     },
     days:{},
     measurements:[],
     cardioLogs:[],
     weeklyReviews:{},
+    nutritionLogs:{},
+    customFoods:[],
     workouts:[],
     journals:{},
     achievements:{},
@@ -360,7 +414,7 @@ function showToast(msg){
 }
 function esc(s=""){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
 function appShell(content){
-  const nav=[["painel","⌂","Painel"],["missoes","✓","Missões"],["treinos","▲","Treinos"],["progresso","↗","Progresso"],["mais","•••","Mais"]];
+  const nav=[["painel","⌂","Painel"],["missoes","✓","Missões"],["treinos","▲","Treinos"],["nutricao","◉","Nutrição"],["progresso","↗","Progresso"],["mais","•••","Mais"]];
   return `<main class="app-shell">${content}</main>
   <nav class="nav"><div class="nav-inner">${nav.map(([k,i,l])=>`<button data-screen="${k}" class="${screen===k?"active":""}"><span class="icon">${i}</span>${l}</button>`).join("")}</div></nav>`;
 }
@@ -371,6 +425,7 @@ function render(){
     if(screen==="painel") html=dashboard();
     if(screen==="missoes") html=missions();
     if(screen==="treinos") html=workoutList();
+    if(screen==="nutricao") html=nutrition();
     if(screen==="progresso") html=progress();
     if(screen==="mais") html=more();
     if(screen==="treinoAtivo") html=workoutPage();
@@ -409,6 +464,7 @@ function dashboard(){
       <div><span>Economia estimada</span><strong>${currencyBRL(smokeEconomy().money)}</strong></div>
     </div>
   </section>
+  <section class="card nutrition-mini"><div class="eyebrow">Nutrição de hoje</div><h2>${Math.round(nutritionTotals().kcal)} / ${Math.round(calorieTarget())} kcal</h2><p class="muted">${estimatedDeficit()>=0?`Déficit estimado de ${Math.round(estimatedDeficit())} kcal`:`Superávit estimado de ${Math.abs(Math.round(estimatedDeficit()))} kcal`}</p><button class="secondary full" data-go-nutrition>ABRIR NUTRIÇÃO</button></section>
   <section class="card"><div class="eyebrow">Boss da semana ${week}</div><h2>${boss[0]}</h2><p class="muted">${boss[1]}</p></section>
   <section class="card"><div class="eyebrow">Campanha</div><div class="progress-track"><div class="progress-bar" style="width:${day/45*100}%"></div></div></section>`;
 }
@@ -489,6 +545,65 @@ function workoutPage(){
 function timerModal(){
   return `<div class="timer-overlay"><div class="timer-card"><div class="eyebrow">Descanso</div><div class="timer-num">${timerValue===0?"VAI!":timerValue}</div><div class="row"><button class="secondary grow" data-plus-timer>+30s</button><button class="primary grow" data-close-timer>Fechar</button></div></div></div>`;
 }
+
+function nutrition(){
+  const totals=nutritionTotals();
+  const target=calorieTarget();
+  const tdee=estimateTDEE();
+  const remaining=target-totals.kcal;
+  const deficit=estimatedDeficit();
+  const meals=["cafe","almoco","lanche","jantar","ceia"];
+  return `<h1>Nutrição</h1>
+  <p class="muted">Valores estimados com base em porções e tabela interna. Use como bússola, não como laudo de laboratório.</p>
+
+  <section class="card nutrition-summary">
+    <div class="eyebrow">Resumo de hoje</div>
+    <h2>${Math.round(totals.kcal)} de ${Math.round(target)} kcal</h2>
+    <div class="progress-track"><div class="progress-bar" style="width:${Math.min(100,totals.kcal/Math.max(1,target)*100)}%"></div></div>
+    <div class="nutrition-grid">
+      ${metric("Restante",Math.round(remaining)+" kcal",remaining>=0?"dentro da meta":"acima da meta")}
+      ${metric("Proteína",Math.round(totals.protein)+" g",`meta ${save.profile.metaProteina||150} g`)}
+      ${metric("Carbo",Math.round(totals.carbs)+" g","estimado")}
+      ${metric("Gordura",Math.round(totals.fat)+" g","estimado")}
+      ${metric("Gasto diário",tdee+" kcal","estimado")}
+      ${metric("Déficit",Math.round(deficit)+" kcal",deficit>=0?"estimado":"superávit estimado")}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="eyebrow">Adicionar alimento</div><h2>Registro rápido</h2>
+    <select id="n-refeicao" class="input">${meals.map(m=>`<option value="${m}">${mealLabel(m)}</option>`).join("")}</select>
+    <input id="n-busca" class="input" placeholder="Buscar alimento">
+    <select id="n-alimento" class="input">${allFoods().map(f=>`<option value="${esc(f.id)}">${esc(f.name)} • ${f.kcal} kcal/${f.unit}</option>`).join("")}</select>
+    <input id="n-quantidade" class="input" placeholder="Quantidade em g ou ml" inputmode="decimal">
+    <button class="primary full" data-add-food>ADICIONAR</button>
+  </section>
+
+  ${meals.map(meal=>{
+    const items=nutritionDay().filter(i=>i.meal===meal);
+    const kcal=items.reduce((s,i)=>s+Number(i.kcal||0),0);
+    return `<section class="card meal-card">
+      <div class="row"><div class="grow"><div class="eyebrow">${mealLabel(meal)}</div><h2>${Math.round(kcal)} kcal</h2></div><span class="badge">${items.length} item(ns)</span></div>
+      ${items.length?items.map(i=>`<div class="food-row">
+        <div class="grow"><strong>${esc(i.name)}</strong><small>${i.qty} ${i.measure} • ${Math.round(i.kcal)} kcal • ${Math.round(i.protein)} g proteína</small></div>
+        <button class="food-delete" data-delete-food="${i.id}">×</button>
+      </div>`).join(""):`<p class="muted">Nenhum alimento registrado.</p>`}
+    </section>`;
+  }).join("")}
+
+  <section class="card">
+    <div class="eyebrow">Alimento personalizado</div><h2>Cadastrar produto</h2>
+    <input id="cf-name" class="input" placeholder="Nome">
+    <div class="nutrition-custom-grid">
+      <input id="cf-kcal" class="input" placeholder="kcal/100 g" inputmode="decimal">
+      <input id="cf-protein" class="input" placeholder="Proteína/100 g" inputmode="decimal">
+      <input id="cf-carbs" class="input" placeholder="Carbo/100 g" inputmode="decimal">
+      <input id="cf-fat" class="input" placeholder="Gordura/100 g" inputmode="decimal">
+    </div>
+    <button class="secondary full" data-save-custom-food>SALVAR ALIMENTO</button>
+  </section>`;
+}
+
 function progress(){
   const fields=[
     ["peso","Peso em kg"],["cintura","Cintura em cm"],["abdomen","Abdômen em cm"],
@@ -761,6 +876,17 @@ function profileForm(){
   <input id="p-cigarros-dia" class="input" value="${p.cigarrosDia??10}" placeholder="Cigarros por dia antes de parar" inputmode="numeric">
   <input id="p-preco-maco" class="input" value="${p.precoMaco??12}" placeholder="Preço do maço em R$" inputmode="decimal">
   <input id="p-cigarros-maco" class="input" value="${p.cigarrosMaco??20}" placeholder="Cigarros por maço" inputmode="numeric">
+  <div class="eyebrow" style="margin-top:14px">Referência nutricional</div>
+  <input id="p-idade" class="input" value="${p.idade??31}" placeholder="Idade" inputmode="numeric">
+  <select id="p-sexo" class="input"><option value="masculino" ${p.sexo==="masculino"?"selected":""}>Masculino</option><option value="feminino" ${p.sexo==="feminino"?"selected":""}>Feminino</option></select>
+  <select id="p-atividade" class="input">
+    <option value="1.2" ${Number(p.atividade)===1.2?"selected":""}>Sedentário</option>
+    <option value="1.35" ${Number(p.atividade)===1.35?"selected":""}>Levemente ativo</option>
+    <option value="1.55" ${Number(p.atividade)===1.55?"selected":""}>Ativo</option>
+    <option value="1.75" ${Number(p.atividade)===1.75?"selected":""}>Muito ativo</option>
+  </select>
+  <input id="p-meta-calorias" class="input" value="${p.metaCalorias??2300}" placeholder="Meta diária de calorias" inputmode="numeric">
+  <input id="p-meta-proteina" class="input" value="${p.metaProteina??150}" placeholder="Meta diária de proteína" inputmode="numeric">
   <button class="primary full" data-save-profile>SALVAR PERFIL</button></section>`;
 }
 function backup(){
@@ -846,6 +972,11 @@ function bind(){
   const ex=document.querySelector("[data-export]"); if(ex) ex.onclick=exportBackup;
   const imp=document.getElementById("import-file"); if(imp) imp.onchange=importBackup;
   const reset=document.querySelector("[data-reset]"); if(reset) reset.onclick=resetAll;
+  const addFood=document.querySelector("[data-add-food]");if(addFood)addFood.onclick=addNutritionFood;
+  document.querySelectorAll("[data-delete-food]").forEach(b=>b.onclick=()=>deleteNutritionFood(b.dataset.deleteFood));
+  const customFood=document.querySelector("[data-save-custom-food]");if(customFood)customFood.onclick=saveCustomFood;
+  const goNutrition=document.querySelector("[data-go-nutrition]");if(goNutrition)goNutrition.onclick=()=>{screen="nutricao";render();};
+  const searchFood=document.getElementById("n-busca");if(searchFood)searchFood.oninput=filterFoodSelect;
   const cardio=document.querySelector("[data-save-cardio]");if(cardio)cardio.onclick=saveCardio;
   const weekly=document.querySelector("[data-save-weekly]");if(weekly)weekly.onclick=saveWeeklyReview;
   const copy=document.querySelector("[data-copy-save]"); if(copy) copy.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify({version:APP_VERSION,save},null,2));showToast("Save copiado");}catch{alert("Não foi possível copiar automaticamente.");}};
@@ -885,8 +1016,49 @@ function saveProfile(){
     ...save.profile,nome:jv("p-nome")||"Régis",altura:num(jv("p-altura")),
     pesoInicial:num(jv("p-inicial")),metaPeso:num(jv("p-meta")),dataInicio:jv("p-data"),
     cigarrosDia:num(jv("p-cigarros-dia"))||0,precoMaco:num(jv("p-preco-maco"))||0,
-    cigarrosMaco:num(jv("p-cigarros-maco"))||20
+    cigarrosMaco:num(jv("p-cigarros-maco"))||20,
+    idade:num(jv("p-idade"))||31,sexo:jv("p-sexo")||"masculino",
+    atividade:num(jv("p-atividade"))||1.35,
+    metaCalorias:num(jv("p-meta-calorias"))||2300,
+    metaProteina:num(jv("p-meta-proteina"))||150
   };persist("Perfil salvo");render();
+}
+
+
+function filterFoodSelect(){
+  const q=(document.getElementById("n-busca")?.value||"").toLowerCase();
+  const select=document.getElementById("n-alimento");
+  if(!select)return;
+  const foods=allFoods().filter(f=>f.name.toLowerCase().includes(q));
+  select.innerHTML=foods.map(f=>`<option value="${esc(f.id)}">${esc(f.name)} • ${f.kcal} kcal/${f.unit}</option>`).join("");
+}
+function addNutritionFood(){
+  const foodId=document.getElementById("n-alimento")?.value;
+  const food=allFoods().find(f=>f.id===foodId);
+  const qty=num(document.getElementById("n-quantidade")?.value||0);
+  if(!food||!qty||qty<=0){alert("Escolha um alimento e informe a quantidade.");return;}
+  const factor=qty/100;
+  nutritionDay().push({
+    id:String(Date.now())+Math.random().toString(16).slice(2),
+    meal:document.getElementById("n-refeicao")?.value||"almoco",
+    foodId:food.id,name:food.name,qty,measure:food.unit.includes("ml")?"ml":"g",
+    kcal:food.kcal*factor,protein:food.protein*factor,carbs:food.carbs*factor,fat:food.fat*factor
+  });
+  persist("Alimento adicionado");
+  render();
+}
+function deleteNutritionFood(id){
+  save.nutritionLogs[today()]=nutritionDay().filter(i=>i.id!==id);
+  persist("Alimento removido");
+  render();
+}
+function saveCustomFood(){
+  const name=jv("cf-name").trim();
+  const kcal=num(jv("cf-kcal")),protein=num(jv("cf-protein")),carbs=num(jv("cf-carbs")),fat=num(jv("cf-fat"));
+  if(!name||!kcal){alert("Informe nome e calorias.");return;}
+  save.customFoods.push({id:"custom_"+Date.now(),name,kcal,protein:protein||0,carbs:carbs||0,fat:fat||0,unit:"100 g"});
+  persist("Alimento personalizado salvo");
+  render();
 }
 
 function saveCardio(){

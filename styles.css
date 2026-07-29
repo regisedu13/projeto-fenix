@@ -42,7 +42,7 @@ p{margin:0}
 .progress-track{height:14px;background:var(--card2);border-radius:99px;overflow:hidden;margin-top:10px}
 .progress-bar{height:100%;background:var(--orange)}
 .nav{position:fixed;bottom:0;left:0;right:0;background:#10141cf2;border-top:1px solid var(--border);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:10}
-.nav-inner{width:min(860px,100%);display:grid;grid-template-columns:repeat(5,1fr)}
+.nav-inner{width:min(860px,100%);display:grid;grid-template-columns:repeat(6,1fr)}
 .nav button{background:none;border:0;color:var(--muted);padding:11px 4px 9px;font-size:11px}
 .nav button.active{color:var(--orange)}
 .nav .icon{display:block;font-size:21px;margin-bottom:2px}
@@ -679,3 +679,15 @@ html:has(.workout-page){
 .measurement-history summary{display:flex;justify-content:space-between;cursor:pointer;list-style:none}.measurement-history summary::-webkit-details-marker{display:none}.measurement-details{padding-top:12px;border-top:1px solid #272727;margin-top:10px}.measurement-details p{margin:5px 0;color:#aaa}
 select.input{appearance:none;-webkit-appearance:none}
 @media(min-width:700px){.measurement-grid{grid-template-columns:repeat(3,1fr)}.measure-change-grid{grid-template-columns:repeat(3,1fr)}}
+
+/* V1.6 Nutrition Basic */
+.nutrition-summary{border-color:#5a151f}
+.nutrition-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+.meal-card{overflow:visible}
+.food-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #242424}
+.food-row:first-of-type{border-top:0}
+.food-row small{display:block;color:#888;margin-top:3px}
+.food-delete{width:34px;height:34px;border-radius:50%;border:1px solid #5b1520;background:#22080c;color:#ff4b5f;font-size:21px}
+.nutrition-custom-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+.nutrition-mini{background:linear-gradient(110deg,rgba(210,10,31,.12),transparent),#101010}
+@media(min-width:700px){.nutrition-grid{grid-template-columns:repeat(3,1fr)}.nutrition-custom-grid{grid-template-columns:repeat(4,1fr)}}
